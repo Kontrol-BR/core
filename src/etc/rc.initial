@@ -50,6 +50,8 @@ echo "  3) Reset the root password            10) Firewall log"
 echo "  4) Reset to factory defaults          11) Reload all services"
 echo "  5) Power off system                   12) Upgrade from console"
 echo "  6) Reboot system                      13) Restore a backup"
+echo "  99) Leave a Domain/AD                 14) Configure SMB/Kerberos"
+echo "                                        15) Join A Domain/AD"
 echo
 read -p "Enter an option: " OPCODE
 echo
@@ -101,6 +103,16 @@ case ${OPCODE} in
 13)
 	/usr/local/etc/rc.initial.restore
 	;;
+14)
+  /usr/local/etc/rc.samba
+	;;
+15)
+  /usr/local/etc/rc.joindomain
+	;;
+99)
+  /usr/local/etc/rc.leavedomain
+	;;
+
 *)
 	;;
 esac

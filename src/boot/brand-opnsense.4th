@@ -33,14 +33,15 @@
 	1+ \ increase y for next time we're called
 ;
 
-: brand ( x y -- ) \ "OPNsense" [wide] logo in B/W (6 rows x 47 columns)
+: brand ( x y -- ) \ "Kontrol" [wide] logo in B/W (6 rows x 47 columns)
 
-	s"  ______  _____  _____                         " brand+
-	s" /  __  |/ ___ |/ __  |                        " brand+
-	s" | |  | | |__/ | |  | |___  ___ _ __  ___  ___ " brand+
-	s" | |  | |  ___/| |  | / __|/ _ \ '_ \/ __|/ _ \" brand+
-	s" | |__| | |    | |  | \__ \  __/ | | \__ \  __/" brand+
-	s" |_____/|_|    |_| /__|___/\___|_| |_|___/\___|" brand+
+s"        _  __           _             _        " brand+
+s"       | |/ /          | |           | |       " brand+
+s"       | ' / ___  _ __ | |_ _ __ ___ | |       " brand+
+s"       |  < / _ \| '_ \| __| '__/ _ \| |       " brand+
+s"       | . | (_) | | | | |_| | | (_) | |       " brand+
+s"       |_|\_\___/|_| |_|\__|_|  \___/|_|       " brand+
+
 
 	2drop
 ;

@@ -50,15 +50,15 @@ CORE_REPOSITORY?=	${CORE_ABI}/libressl
 CORE_REPOSITORY?=	${FLAVOUR}
 .endif
 
-CORE_NAME?=		opnsense
+CORE_NAME?=		kontrol
 CORE_TYPE?=		release
-CORE_MESSAGE?=		Gecko got the groove
+CORE_MESSAGE?=		kontrol-versy
 
-CORE_MAINTAINER?=	franco@opnsense.org
-CORE_PACKAGESITE?=	http://pkg.opnsense.org
+CORE_MAINTAINER?=	contato@kontrolsecurity.com.br
+CORE_PACKAGESITE?=	http://kontrol-pkg.brasilia.me:8081
 CORE_ORIGIN?=		opnsense/${CORE_NAME}
-CORE_COMMENT?=		OPNsense ${CORE_TYPE} package
-CORE_WWW?=		https://opnsense.org/
+CORE_COMMENT?=		Kontrol ${CORE_TYPE} package
+CORE_WWW?=		http://kontrolsecurity.com.br
 
 CORE_DEPENDS_amd64?=	beep bsdinstaller
 CORE_DEPENDS_i386?=	${CORE_DEPENDS_amd64}
