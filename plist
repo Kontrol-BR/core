@@ -111,7 +111,9 @@
 /usr/local/etc/rc.ipfw
 /usr/local/etc/rc.ipfw.flush_all
 /usr/local/etc/rc.ipfw.postload
+/usr/local/etc/rc.joindomain
 /usr/local/etc/rc.kill_states
+/usr/local/etc/rc.leavedomain
 /usr/local/etc/rc.linkup
 /usr/local/etc/rc.loader
 /usr/local/etc/rc.loader.d/00-banner
@@ -128,6 +130,7 @@
 /usr/local/etc/rc.resolv_conf_generate
 /usr/local/etc/rc.restart_webgui
 /usr/local/etc/rc.routing_configure
+/usr/local/etc/rc.samba
 /usr/local/etc/rc.shutdown
 /usr/local/etc/rc.sshd
 /usr/local/etc/rc.subr.d/crashdump
