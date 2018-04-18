@@ -55,8 +55,8 @@ CORE_TYPE?=		release
 CORE_MESSAGE?=		kontrol-versy
 
 CORE_MAINTAINER?=	contato@kontrolsecurity.com.br
-CORE_PACKAGESITE?=	http://pkg.opnsense.org
-CORE_ORIGIN?=		opnsense/${CORE_NAME}
+CORE_PACKAGESITE?=	http://kontrol-pkg.brasilia.me:8081
+CORE_ORIGIN?=		kontrol/${CORE_NAME}
 CORE_COMMENT?=		Kontrol ${CORE_TYPE} package
 CORE_WWW?=		http://kontrolsecurity.com.br
 
