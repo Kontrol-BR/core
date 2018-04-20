@@ -38,8 +38,7 @@
             <Plugins order="20" url="/ui/core/firmware/#plugins"/>
             <Packages order="30" url="/ui/core/firmware/#packages"/>
             <Settings order="40" url="/ui/core/firmware/#settings"/>
-            <Reporter order="50" url="/crash_reporter.php"/>
-            <Defaults order="60" url="/diag_defaults.php"/>
+            <Defaults order="50" url="/diag_defaults.php"/>
         </Firmware>
         <HighAvailability order="50" VisibleName="High Availability" cssClass="fa fa-refresh fa-fw">
             <Settings order="100" url="/system_hasync.php"/>
