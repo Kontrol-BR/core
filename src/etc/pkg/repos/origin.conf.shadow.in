@@ -1,7 +1,7 @@
-OPNsense: {
+Kontrol: {
   fingerprints: "/usr/local/etc/pkg/fingerprints/OPNsense",
-  url: "pkg+%%CORE_PACKAGESITE%%/${ABI}/%%CORE_REPOSITORY%%",
-  signature_type: "fingerprints",
+  url: "pkg+%%CORE_PACKAGESITE%%/kontrol/%%CORE_REPOSITORY%%",
+  signature_type: "none",
   mirror_type: "srv",
   priority: 11,
   enabled: yes
