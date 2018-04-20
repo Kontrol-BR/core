@@ -100,7 +100,7 @@ function webgui_configure_do($verbose = false, $interface = '')
                 /* XXX ought to be replaced by PHP calls */
                 '/usr/local/bin/openssl req -new ' .
                 '-newkey rsa:4096 -sha256 -days 365 -nodes -x509 ' .
-                '-subj "/C=NL/ST=Zuid-Holland/L=Middelharnis/O=OPNsense" ' .
+                '-subj "/C=BR/ST=Sao Paulo/L=Sao Paulo/O=Kontrol" ' .
                 '-keyout /tmp/ssl.key -out /tmp/ssl.crt'
             );
             $crt = file_get_contents('/tmp/ssl.crt');
