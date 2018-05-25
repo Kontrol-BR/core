@@ -364,11 +364,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $pconfig['dhcp6prefixonly'] = isset($a_interfaces[$if]['dhcp6prefixonly']);
     $pconfig['dhcp6usev4iface'] = isset($a_interfaces[$if]['dhcp6usev4iface']);
     $pconfig['dhcp6norelease'] = isset($a_interfaces[$if]['dhcp6norelease']);
-    // Due to the settings being split per interface type, we need to copy the settings that use the same
-    // config directive.
-    $pconfig['staticv6usev4iface'] = $pconfig['dhcp6usev4iface'];
     $pconfig['adv_dhcp6_debug'] = isset($a_interfaces[$if]['adv_dhcp6_debug']);
     $pconfig['track6-prefix-id--hex'] = sprintf("%x", empty($pconfig['track6-prefix-id']) ? 0 :$pconfig['track6-prefix-id']);
+
+    /*
+     * Due to the settings being split per interface type, we need
+     * to copy the settings that use the same config directive.
+     */
+    $pconfig['staticv6usev4iface'] = $pconfig['dhcp6usev4iface'];
+    $pconfig['slaacusev4iface'] = $pconfig['dhcp6usev4iface'];
 
     // ipv4 type (from ipaddr)
     if (is_ipaddrv4($pconfig['ipaddr'])) {
@@ -513,7 +517,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 foreach ($toapplylist as $ifapply => $ifcfgo) {
                     interface_bring_down($ifapply, $ifcfgo);
                     if (isset($config['interfaces'][$ifapply]['enable'])) {
-                        interface_configure($ifapply, true);
+                        interface_configure(false, $ifapply, true);
                     }
                 }
             }
@@ -1063,6 +1067,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                     }
                     break;
                 case "slaac":
+                    if (!empty($pconfig['slaacusev4iface'])) {
+                        $new_config['dhcp6usev4iface'] = true;
+                    }
                     $new_config['ipaddrv6'] = "slaac";
                     break;
                 case "dhcp6":
@@ -1252,11 +1259,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             // save interface details
             $a_interfaces[$if] = $new_config;
 
-            if (!empty($old_config['ipaddr']) && $old_config['ipaddr'] == 'dhcp' && $new_config['ipaddr'] != 'dhcp') {
-                // change from dhcp to something else, kill dhclient
-                kill_dhclient_process($old_config['if']);
-            }
-
             // save to config
             write_config();
 
@@ -1375,7 +1377,7 @@ include("head.inc");
       $("#type").change();
 
       $("#type6").change(function(){
-          $('#staticv6, #dhcp6, #6rd, #track6').hide();
+          $('#staticv6, #slaac, #dhcp6, #6rd, #track6').hide();
           $("#" +$(this).val()).show();
       });
       $("#type6").change();
@@ -2362,7 +2364,7 @@ include("head.inc");
                           <td>
                             <input name="staticv6usev4iface" type="checkbox" id="staticv6usev4iface" value="yes" <?=!empty($pconfig['staticv6usev4iface']) ? "checked=\"checked\"" : ""; ?> />
                             <div class="hidden" data-for="help_for_staticv6usev4iface">
-                                <?=gettext("Use the IPv4 connectivity link.");?>
+                              <?= gettext('Set the IPv6 address on the IPv4 PPP connectivity link.') ?>
                             </div>
                           </td>
                         </tr>
@@ -2466,11 +2468,11 @@ include("head.inc");
                           </td>
                         </tr>
                         <tr class="dhcpv6_basic">
-                          <td><a id="help_for_dhcp6prefixonly" href="#" class="showhelp"><i class="fa fa-info-circle"></i></a> <?=gettext("Request only a IPv6 prefix"); ?></td>
+                          <td><a id="help_for_dhcp6prefixonly" href="#" class="showhelp"><i class="fa fa-info-circle"></i></a> <?=gettext("Request only an IPv6 prefix"); ?></td>
                           <td>
                             <input name="dhcp6prefixonly" type="checkbox" id="dhcp6prefixonly" value="yes" <?=!empty($pconfig['dhcp6prefixonly']) ? "checked=\"checked\"" : "";?> />
                             <div class="hidden" data-for="help_for_dhcp6prefixonly">
-                              <?=gettext("Only request a IPv6 prefix, do not request a IPv6 address"); ?>
+                              <?= gettext('Only request an IPv6 prefix; do not request an IPv6 address.') ?>
                             </div>
                           </td>
                         </tr>
@@ -2551,7 +2553,7 @@ include("head.inc");
                           <td>
                             <input name="dhcp6usev4iface" type="checkbox" id="dhcp6usev4iface" value="yes" <?=!empty($pconfig['dhcp6usev4iface']) ? "checked=\"checked\"" : ""; ?> />
                             <div class="hidden" data-for="help_for_dhcp6usev4iface">
-                              <?=gettext("Request a IPv6 prefix/information through the IPv4 connectivity link"); ?>
+                              <?= gettext('Request the IPv6 information through the IPv4 PPP connectivity link.') ?>
                             </div>
                           </td>
                         </tr>
@@ -2697,6 +2699,29 @@ include("head.inc");
                     </table>
                   </div>
                 </div>
+                <!-- Section : SLAAC -->
+                <div class="tab-content content-box col-xs-12 __mb" id="slaac" style="display:none">
+                  <div class="table-responsive">
+                    <table class="table table-striped opnsense_standard_table_form">
+                      <thead>
+                        <tr>
+                          <th colspan="2"><?=gettext("SLAAC configuration"); ?></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td style="width:22%"><a id="help_for_slaacusev4iface" href="#" class="showhelp"><i class="fa fa-info-circle"></i></a> <?=gettext("Use IPv4 connectivity"); ?></td>
+                          <td style="width:78%">
+                            <input name="slaacusev4iface" type="checkbox" id="slaacusev4iface" value="yes" <?=!empty($pconfig['slaacusev4iface']) ? "checked=\"checked\"" : ""; ?> />
+                            <div class="hidden" data-for="help_for_slaacusev4iface">
+                              <?= gettext('Request the IPv6 information through the IPv4 PPP connectivity link.') ?>
+                            </div>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
                 <!-- Section : 6RD-->
                 <div class="tab-content content-box col-xs-12 __mb" id="6rd" style="display:none">
                   <div class="table-responsive">
@@ -2761,9 +2786,10 @@ include("head.inc");
 <?php
                             foreach (get_configured_interface_with_descr(false, true) as $iface => $ifacename):
                               switch($config['interfaces'][$iface]['ipaddrv6']) {
-                                case "6to4":
-                                case "6rd":
-                                case "dhcp6":
+                                case '6rd':
+                                case '6to4':
+                                case 'dhcp6':
+                                case 'slaac':
                                     break;
                                 default:
                                     continue 2;

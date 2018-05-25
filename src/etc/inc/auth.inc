@@ -49,7 +49,7 @@ if (function_exists("display_error_form") && !isset($config['system']['webgui'][
     /* DNS ReBinding attack prevention */
     $found_host = false;
 
-    /* Either a IPv6 address with or without a alternate port */
+    /* either an IPv6 address with or without an alternate port */
     if (strstr($_SERVER['HTTP_HOST'], "]")) {
         $http_host_port = explode("]", $_SERVER['HTTP_HOST']);
         /* v6 address has more parts, drop the last part */
@@ -361,7 +361,7 @@ function auth_get_shells($uid = 0)
     $shells = array('' => '/sbin/nologin');
 
     if ($uid == 0) {
-        $shells = array('' => '/usr/local/etc/rc.initial');
+        $shells = array('' => '/usr/local/sbin/opnsense-shell');
     }
 
     $etc_shells = @file_get_contents('/etc/shells');
@@ -451,7 +451,7 @@ function local_user_set(&$user, $force_password = false)
     $lock_account = 'lock';
 
     if ($user_uid == 0) {
-        $user_shell = isset($user['shell']) ? $user['shell'] : '/usr/local/etc/rc.initial';
+        $user_shell = isset($user['shell']) ? $user['shell'] : '/usr/local/sbin/opnsense-shell';
         $user_group = 'wheel';
         $user_home = '/root';
     } else {

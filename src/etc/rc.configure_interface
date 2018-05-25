@@ -28,11 +28,13 @@
 */
 
 require_once("config.inc");
-require_once("filter.inc");
+require_once('auth.inc');
 require_once("util.inc");
+require_once("filter.inc");
 require_once("system.inc");
 require_once("interfaces.inc");
 require_once("services.inc");
 
-interfaces_configure(true);
-filter_configure_sync(true);
+$argument = isset($argv[1]) ? trim($argv[1]) : 'wan';
+
+interface_configure(true, $argument, true);

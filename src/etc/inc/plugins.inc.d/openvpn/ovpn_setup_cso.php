@@ -2,13 +2,13 @@
 <?php
 
 /*
- * Copyright (C) 2003-2004 Manuel Kasper <mk@neon1.net>
+ * Copyright (C) 2018 Deciso B.V.
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *
- * 1. Redistributions of source code must retain the above copyright notice,
+ *  1. Redistributions of source code must retain the above copyright notice,
  *    this list of conditions and the following disclaimer.
  *
  * 2. Redistributions in binary form must reproduce the above copyright
@@ -28,23 +28,31 @@
  */
 
 require_once("config.inc");
-require_once("console.inc");
-require_once("filter.inc");
 require_once("util.inc");
-require_once("rrd.inc");
-require_once("system.inc");
-require_once("services.inc");
-require_once("interfaces.inc");
+require_once("plugins.inc.d/openvpn.inc");
 
-system_console_mute();
-
-if (set_networking_interfaces_ports()) {
-    /* need to stop local dhcp servers to avoid wrong leases */
-    killbypid('/var/dhcpd/var/run/dhcpd.pid', 'TERM', true);
-    killbypid('/var/dhcpd/var/run/dhcpdv6.pid', 'TERM', true);
-
-    interfaces_configure(true);
-    rrd_configure(true);
+/* setup syslog logging */
+openlog("openvpn", LOG_ODELAY, LOG_AUTH);
+$common_name = getenv("common_name");
+$vpnid = filter_var($argv[1], FILTER_SANITIZE_NUMBER_INT);
+if (isset($config['openvpn']['openvpn-server'])) {
+    foreach ($config['openvpn']['openvpn-server'] as $server) {
+        if ("{$server['vpnid']}" === "$vpnid") {
+            $all_cso = openvpn_fetch_csc_list();
+            if (!empty($all_cso[$vpnid][$common_name])) {
+                $cso = $all_cso[$vpnid][$common_name];
+            } else {
+                $cso = array("common_name" => $common_name);
+            }
+            // $argv[2] contains the temporary file used for the profile specified by client-connect
+            $cso_filename = openvpn_csc_conf_write($cso, $server, $argv[2]);
+            if (!empty($cso_filename)) {
+                syslog(LOG_NOTICE, "client config created @ {$cso_filename}");
+            }
+            break;
+        }
+    }
 }
 
-system_console_unmute();
+closelog();
+exit(0);

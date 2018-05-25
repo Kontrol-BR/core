@@ -97,7 +97,6 @@ CORE_DEPENDS?=		${CORE_DEPENDS_${CORE_ARCH}} \
 			php${CORE_PHP}-filter \
 			php${CORE_PHP}-gettext \
 			php${CORE_PHP}-hash \
-			php${CORE_PHP}-intl \
 			php${CORE_PHP}-json \
 			php${CORE_PHP}-ldap \
 			php${CORE_PHP}-mcrypt \
@@ -343,6 +342,10 @@ dhparam:
 .endfor
 
 test: want-phpunit6-php${CORE_PHP}
+	@if [ "$$(${PKG} query %n-%v ${CORE_NAME})" != "${CORE_NAME}-${CORE_VERSION}" ]; then \
+		echo "Installed version does not match, expected ${CORE_NAME}-${CORE_VERSION}"; \
+		exit 1; \
+	fi
 	@cd ${.CURDIR}/src/opnsense/mvc/tests && \
 	    phpunit --configuration PHPunit.xml
 

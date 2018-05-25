@@ -15,6 +15,21 @@ trap : 3
 # way to override it because the target user most likely does
 # not have a shell set.
 #
+# Let us at least parse our command line arguments as the command
+# does not start with a `-' in either case unless somebody wants
+# to inject something because it knows about the rest of the system.
+while getopts '' OPT; do
+	case ${OPT} in
+	# XXX reserved for future use
+	*)
+		echo "Usage: man opnsense-shell" >&2
+		exit 1
+		;;
+	esac
+done
+
+shift $((${OPTIND} - 1))
+
 # Worse still, su(1) *is* root, but changes to the selected user ID
 # so it creates its own downfall by selecting the root shell to do it.
 # On OpenBSD, su(1) does have the `-s' parameter to override the shell.
@@ -63,25 +78,25 @@ case ${OPCODE} in
         exit
         ;;
 1)
-        /usr/local/etc/rc.initial.setports
+        /usr/local/opnsense/scripts/shell/setports.php
         ;;
 2)
-        /usr/local/etc/rc.initial.setlanip
+        /usr/local/opnsense/scripts/shell/setaddr.php
         ;;
 3)
-        /usr/local/etc/rc.initial.password
+        /usr/local/opnsense/scripts/shell/password.php
         ;;
 4)
-        /usr/local/etc/rc.initial.defaults
+        /usr/local/opnsense/scripts/shell/defaults.php
         ;;
 5)
-        /usr/local/etc/rc.initial.halt
+        /usr/local/opnsense/scripts/shell/halt.php
         ;;
 6)
-        /usr/local/etc/rc.initial.reboot
+        /usr/local/opnsense/scripts/shell/reboot.php
         ;;
 7)
-        /usr/local/etc/rc.initial.ping
+        /usr/local/opnsense/scripts/shell/ping.php
         ;;
 8)
         /bin/csh
@@ -96,15 +111,15 @@ case ${OPCODE} in
 	/usr/local/etc/rc.reload_all
 	;;
 12)
-	/usr/local/etc/rc.initial.firmware
+	/usr/local/opnsense/scripts/shell/firmware.sh
 	;;
 13)
-	/usr/local/etc/rc.initial.restore
+	/usr/local/opnsense/scripts/shell/restore.sh
 	;;
 *)
 	;;
 esac
 
-/usr/local/etc/rc.initial.banner
+/usr/local/opnsense/scripts/shell/banner.php
 
 done

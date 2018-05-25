@@ -1,6 +1,6 @@
 {#
  # Copyright (c) 2015-2018 Franco Fichtner <franco@opnsense.org>
- # Copyright (c) 2015-2016 Deciso B.V.
+ # Copyright (c) 2015-2018 Deciso B.V.
  # All rights reserved.
  #
  # Redistribution and use in source and binary forms, with or without modification,
@@ -47,6 +47,8 @@
         updateStatusPrepare(false);
         $('#major-upgrade').hide();
         $('#upgrade_maj').prop('disabled', true);
+        $.upgrade_major_message = '';
+        $.upgrade_major_version = '';
 
         // request status
         ajaxGet('/api/core/firmware/status',{},function(data,status){
@@ -102,10 +104,13 @@
                 packagesInfo(true);
             }
 
-            $.upgrade_major_message = data['upgrade_major_message'];
-            $.upgrade_major_version = data['upgrade_major_version'];
-
-            if ($.upgrade_major_version != "") {
+            if ('upgrade_major_message' in data) {
+                $.upgrade_major_message = data['upgrade_major_message'];
+            }
+            if ('upgrade_major_version' in data) {
+                $.upgrade_major_version = data['upgrade_major_version'];
+            }
+            if ($.upgrade_major_version != '') {
                 $('#upgrade-version').text($.upgrade_major_version);
                 $('#major-upgrade').show();
             }
@@ -607,13 +612,15 @@
                             .prop('selected', selected)
                     );
                 });
-                $("#firmware_mirror").prepend($("<option/>")
+                if (firmwareoptions['allow_custom']) {
+                    $("#firmware_mirror").prepend($("<option/>")
                         .attr("value", firmwareconfig['mirror'])
                         .text("(other)")
                         .data("other", 1)
                         .data("has_subscription", false)
                         .prop('selected', other_selected)
-                );
+                    );
+                }
 
                 if ($("#firmware_mirror option:selected").data("has_subscription") == true) {
                     $("#firmware_mirror_subscription").val(firmwareconfig['mirror'].substr($("#firmware_mirror").val().length+1));
@@ -636,12 +643,14 @@
                             .prop('selected', selected)
                     );
                 });
-                $("#firmware_flavour").prepend($("<option/>")
-                        .attr("value",firmwareconfig['flavour'])
+                if (firmwareoptions['allow_custom']) {
+                    $("#firmware_flavour").prepend($("<option/>")
+                        .attr("value", firmwareconfig['flavour'])
                         .text("(other)")
                         .data("other", 1)
                         .prop('selected', other_selected)
-                );
+                    );
+                }
                 $("#firmware_flavour").selectpicker('refresh');
                 $("#firmware_flavour").change();
 
@@ -746,7 +755,7 @@
                 <li id="packagestab"><a data-toggle="tab" href="#packages">{{ lang._('Packages') }}</a></li>
                 <li id="settingstab"><a data-toggle="tab" href="#settings">{{ lang._('Settings') }}</a></li>
             </ul>
-            <div class="tab-content content-box tab-content">
+            <div class="tab-content content-box">
                 <div id="updates" class="tab-pane fade in active">
                     <textarea name="output" id="update_status" class="form-control" rows="25" wrap="hard" readonly="readonly" style="max-width:100%; font-family: monospace; display: none;"></textarea>
                     <table class="table table-striped table-condensed table-responsive" id="updatelist">

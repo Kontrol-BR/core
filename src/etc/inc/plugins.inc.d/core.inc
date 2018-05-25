@@ -45,7 +45,7 @@ function core_services()
     if (isset($config['dhcrelay']['enable'])) {
         $pconfig = array();
         $pconfig['name'] = "dhcrelay";
-        $pconfig['description'] = gettext("DHCP Relay");
+        $pconfig['description'] = gettext("DHCPv4 Relay");
         $pconfig['php']['restart'] = array('services_dhcrelay_configure');
         $pconfig['php']['start'] = array('services_dhcrelay_configure');
         $pconfig['pidfile'] = '/var/run/dhcrelay.pid';
@@ -65,7 +65,7 @@ function core_services()
     if (is_dhcpv4_server_enabled()) {
         $pconfig = array();
         $pconfig['name'] = 'dhcpd';
-        $pconfig['description'] = gettext("DHCP Server");
+        $pconfig['description'] = gettext("DHCPv4 Server");
         $pconfig['php']['restart'] = array('services_dhcpdv4_configure');
         $pconfig['php']['start'] = array('services_dhcpdv4_configure');
         $pconfig['pidfile'] = '/var/dhcpd/var/run/dhcpd.pid';
@@ -90,6 +90,27 @@ function core_services()
         $pconfig['php']['start'] = array('setup_gateways_monitor');
         $pconfig['pidfile'] = '/var/run/apinger.pid';
         $services[] = $pconfig;
+    }
+
+    if (is_dpinger_enabled()) {
+        $gateways_arr_all = return_gateways_array(true);
+
+        foreach($gateways_arr_all as $name => $gateway) {
+            if (isset($gateway['monitor_disable'])) {
+                continue;
+            }
+
+            $pconfig = array();
+            $pconfig['description'] = sprintf(gettext('Gateway Monitor (%s)'), $gateway['name']);
+            $pconfig['php']['restart'] = array('setup_gateways_monitor');
+            $pconfig['php']['start'] = array('setup_gateways_monitor');
+            $pconfig['pidfile'] = "/var/run/dpinger_{$name}.pid";
+            $pconfig['php']['args'] = array('verbose', 'id');
+            $pconfig['name'] = 'dpinger';
+            $pconfig['verbose'] = false;
+            $pconfig['id'] = $name;
+            $services[] = $pconfig;
+        }
     }
 
     if (isset($config['OPNsense']['captiveportal']['zones']['zone'])) {
@@ -140,7 +161,7 @@ function core_services()
     );
 
     $services[] = array(
-        'description' => gettext('Syslog'),
+        'description' => gettext('Local Syslog'),
         'php' => array(
             "start" => array('system_syslogd_start'),
             "restart" => array('system_syslogd_start')

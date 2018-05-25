@@ -559,6 +559,19 @@ function ipsec_get_number_of_phase2($ikeid)
     return $nbph2;
 }
 
+function ipsec_resolve($hostname)
+{
+    if (!is_ipaddr($hostname)) {
+        /* XXX IPv4-only */
+        $ip = gethostbyname($hostname);
+        if ($ip && $ip != $hostname) {
+            $hostname = $ip;
+        }
+    }
+
+    return $hostname;
+}
+
 function ipsec_find_id(&$ph1ent, $side = 'local')
 {
     $id_data = null;
@@ -579,17 +592,10 @@ function ipsec_find_id(&$ph1ent, $side = 'local')
             $thisid_data = ipsec_get_phase1_src($ph1ent);
             break;
         case "dyn_dns":
-            $thisid_data = resolve_retry($id_data);
+            $thisid_data = ipsec_resolve($id_data);
             break;
         case "peeraddress":
-            if (!is_ipaddr($ph1ent['remote-gateway'])) {
-                $thisid_data = resolve_retry($ph1ent['remote-gateway']);
-            } else {
-                $thisid_data = $ph1ent['remote-gateway'];
-            }
-            break;
-        case "address":
-            $thisid_data = $id_data;
+            $thisid_data = ipsec_resolve($ph1ent['remote-gateway']);
             break;
         default:
             $thisid_data = !empty($id_data) ? "{$id_data}" : null;
@@ -881,12 +887,17 @@ starter {
 }
 
 charon {
-
     # number of worker threads in charon
     threads = 16
     ikesa_table_size = 32
     ikesa_table_segments = 4
-    init_limit_half_open = 1000;
+    init_limit_half_open = 1000
+    ignore_acquire_ts = yes
+    syslog {
+        daemon {
+            ike_name = yes
+        }
+    }
 {$cnf_add_to_charon_section}
 
 EOD;
@@ -981,7 +992,7 @@ EOD;
                             if (in_array($auth_server['name'], explode(',', $ph1ent['authservers']))) {
                                 $radius_servers .= "\t\t\t\tserver" . $radius_server_num . " {\n";
                                 $radius_servers .= "\t\t\t\t\taddress = " . $auth_server['host'] . "\n";
-                                $radius_servers .= "\t\t\t\t\tsecret = " . $auth_server['radius_secret'] . "\n";
+                                $radius_servers .= "\t\t\t\t\tsecret = \"" . $auth_server['radius_secret'] . "\"\n";
                                 $radius_servers .= "\t\t\t\t\tauth_port = " . $auth_server['radius_auth_port'] . "\n";
 
                                 if (!empty($auth_server['radius_acct_port'])) {
