@@ -58,7 +58,7 @@ function parse_auth_properties($props)
 {
     $result = array();
     if (!empty($props['Framed-IP-Address']) && !empty($props['Framed-IP-Netmask'])) {
-        $cidrmask = 32-log((ip2long($props['Framed-IP-Netmask']) ^ ip2long('255.255.255.255'))+1,2);
+        $cidrmask = 32-log((ip2long($props['Framed-IP-Netmask']) ^ ip2long('255.255.255.255'))+1, 2);
         $result['tunnel_network'] = $props['Framed-IP-Address'] . "/" . $cidrmask;
     }
     if (!empty($props['Framed-Route']) && is_array($props['Framed-Route'])) {
@@ -117,10 +117,10 @@ if (count($argv) > 6) {
                 $vpnid = filter_var($a_server['vpnid'], FILTER_SANITIZE_NUMBER_INT);
                 // fetch or  create client specif override
                 $all_cso = openvpn_fetch_csc_list();
-                if (!empty($all_cso[$vpnid][$username])) {
-                    $cso = $all_cso[$vpnid][$username];
+                if (!empty($all_cso[$vpnid][$common_name])) {
+                    $cso = $all_cso[$vpnid][$common_name];
                 } else {
-                    $cso = array("common_name" => $username);
+                    $cso = array("common_name" => $common_name);
                 }
                 $cso = array_merge($cso, parse_auth_properties($authenticator->getLastAuthProperties()));
                 $cso_filename = openvpn_csc_conf_write($cso, $a_server);

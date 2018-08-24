@@ -1,34 +1,34 @@
 <?php
 
 /*
-    Copyright (C) 2014-2016 Deciso B.V.
-    Copyright (C) 2007 Scott Dale
-    Copyright (C) 2004-2005 T. Lechat <dev@lechat.org>
-    Copyright (C) 2004-2005 Manuel Kasper <mk@neon1.net>
-    Copyright (C) 2004-2005 Jonathan Watt <jwatt@jwatt.org>
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are met:
-
-    1. Redistributions of source code must retain the above copyright notice,
-       this list of conditions and the following disclaimer.
-
-    2. Redistributions in binary form must reproduce the above copyright
-       notice, this list of conditions and the following disclaimer in the
-       documentation and/or other materials provided with the distribution.
-
-    THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES,
-    INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
-    AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
-    AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
-    OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-    SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-    INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-    CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-    ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
-*/
+ * Copyright (C) 2014-2016 Deciso B.V.
+ * Copyright (C) 2007 Scott Dale
+ * Copyright (C) 2004-2005 T. Lechat <dev@lechat.org>
+ * Copyright (C) 2004-2005 Manuel Kasper <mk@neon1.net>
+ * Copyright (C) 2004-2005 Jonathan Watt <jwatt@jwatt.org>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice,
+ *    this list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES,
+ * INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
+ * AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ * AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+ * OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
 
 require_once("guiconfig.inc");
 require_once("widgets/include/interface_list.inc");
@@ -49,18 +49,18 @@ require_once("interfaces.inc");
               switch (interface_data['status']) {
                   case 'up':
                     $("#"+tr_id).find('.text-danger').removeClass('text-danger').addClass('text-success');
-                    $("#"+tr_id).find('.glyphicon-arrow-down').removeClass('glyphicon-arrow-down').addClass('glyphicon-arrow-up');
-                    $("#"+tr_id).find('.glyphicon-arrow-remove').removeClass('glyphicon-arrow-remove').addClass('glyphicon-arrow-up');
+                    $("#"+tr_id).find('.fa-arrow-down').removeClass('fa-arrow-down').addClass('fa-arrow-up');
+                    $("#"+tr_id).find('.fa-times').removeClass('fa-times').addClass('fa-arrow-up');
                     break;
                   case 'down':
                     $("#"+tr_id).find('.text-success').removeClass('text-success').addClass('text-danger');
-                    $("#"+tr_id).find('.glyphicon-arrow-up').removeClass('glyphicon-arrow-up').addClass('glyphicon-arrow-down');
-                    $("#"+tr_id).find('.glyphicon-arrow-remove').removeClass('glyphicon-arrow-remove').addClass('glyphicon-arrow-down');
+                    $("#"+tr_id).find('.fa-arrow-up').removeClass('fa-arrow-up').addClass('fa-arrow-down');
+                    $("#"+tr_id).find('.fa-times').removeClass('fa-times').addClass('fa-arrow-down');
                     break;
                   default:
                     $("#"+tr_id).find('.text-success').removeClass('text-success').addClass('text-danger');
-                    $("#"+tr_id).find('.glyphicon-arrow-down').removeClass('glyphicon-arrow-down').addClass('glyphicon-arrow-remove');
-                    $("#"+tr_id).find('.glyphicon-arrow-up').removeClass('glyphicon-arrow-up').addClass('glyphicon-arrow-remove');
+                    $("#"+tr_id).find('.fa-arrow-down').removeClass('fa-arrow-down').addClass('fa-times');
+                    $("#"+tr_id).find('.fa-arrow-up').removeClass('fa-arrow-up').addClass('fa-times');
               }
           }
       });
@@ -74,27 +74,27 @@ require_once("interfaces.inc");
       $ifinfo = $ifsinfo[$ifdescr];
       $iswireless = is_interface_wireless($ifdescr);?>
       <tr id="interface_widget_item_<?=$ifname;?>">
-        <td>
+        <td style="width:15%;">
 <?php
           if (isset($ifinfo['ppplink'])):?>
-            <span title="3g" class="glyphicon glyphicon-phone text-success"></span>
+            <span title="3g" class="fa fa-mobile text-success"></span>
 <?php
           elseif ($iswireless):
             if ($ifinfo['status'] == 'associated' || $ifinfo['status'] == 'up'):?>
-            <span title="wlan" class="glyphicon glyphicon-signal text-success"></span>
+            <span title="wlan" class="fa fa-signal text-success"></span>
 <?php
             else:?>
-            <span title="wlan_d" class="glyphicon glyphicon-signal text-danger"></span>
+            <span title="wlan_d" class="fa fa-signal text-danger"></span>
 <?php
             endif;?>
 <?php
           else:?>
 <?php
             if ($ifinfo['status'] == "up"):?>
-              <span title="cablenic" class="glyphicon glyphicon-transfer text-success"></span>
+              <span title="cablenic" class="fa fa-exchange text-success"></span>
 <?php
             else:?>
-              <span title="cablenic" class="glyphicon glyphicon-transfer text-danger"></span>
+              <span title="cablenic" class="fa fa-exchange text-danger"></span>
 <?php
             endif;?>
 <?php
@@ -108,25 +108,25 @@ require_once("interfaces.inc");
             </u>
           </strong>
         </td>
-        <td>
+        <td style="width:5%;">
 <?php
         if ($ifinfo['status'] == "up" || $ifinfo['status'] == "associated"):?>
-          <span class="glyphicon glyphicon-arrow-up text-success"></span>
-<?php
-        elseif ($ifinfo['status'] == "no carrier"):?>
-          <span class="glyphicon glyphicon-arrow-down text-danger"></span>
+          <span class="fa fa-arrow-up text-success"></span>
 <?php
         elseif ($ifinfo['status'] == "down"):?>
-          <span class="glyphicon glyphicon-arrow-remove text-danger"></span>
+          <span class="fa fa-arrow-down text-danger"></span>
+<?php
+        elseif ($ifinfo['status'] == "no carrier"):?>
+          <span class="fa fa-times text-danger"></span>
 <?php
         else:?>
           <?=htmlspecialchars($ifinfo['status']);?>
 <?php
         endif;?>
-        <td>
+        <td style="width:35%;">
           <?=empty($ifinfo['media']) ? htmlspecialchars($ifinfo['cell_mode']) : htmlspecialchars($ifinfo['media']);?>
         </td>
-        <td>
+        <td style="width:45%;">
           <?=htmlspecialchars($ifinfo['ipaddr']);?>
           <?=!empty($ifinfo['ipaddr']) ? "<br/>" : "";?>
           <?=htmlspecialchars($ifinfo['ipaddrv6']);?>

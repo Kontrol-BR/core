@@ -44,6 +44,7 @@ function webgui_configure_do($verbose = false, $interface = '')
     $interfaces = array();
     if (!empty($config['system']['webgui']['interfaces'])) {
         $interfaces = explode(',', $config['system']['webgui']['interfaces']);
+        $interfaces[] = 'lo0';
     }
 
     if (!empty($interface) && !in_array($interface, $interfaces)) {
@@ -58,33 +59,15 @@ function webgui_configure_do($verbose = false, $interface = '')
     $listeners = count($interfaces) ? array() : array('0.0.0.0', '::');
 
     foreach ($interfaces as $interface) {
-        $realif = get_real_interface($interface);
-        $addrs = legacy_get_interface_addresses($realif);
-        foreach (array('ipaddr', 'ipaddr6'/*, 'ipaddr6_ll'*/) as $type) {
-            if (!empty($addrs[$type])) {
-                $listeners[] = $addrs[$type];
+        foreach (legacy_getall_interface_addresses(get_real_interface($interface)) as $tmpaddr) {
+            $tmpaddr = explode('/', $tmpaddr)[0];
+            /* no support for link-local address with scope specified */
+            $tmpaddr = explode('%', $tmpaddr)[0];
+            /* link-local does not seem to be supported */
+            if (!empty($tmpaddr) && !is_linklocal($tmpaddr)) {
+                $listeners[] = $tmpaddr;
             }
         }
-
-        foreach (array('ipaddr', 'ipaddrv6') as $type) {
-            if (empty($config['interfaces'][$interface][$type])) {
-                continue;
-            }
-            $addr = $config['interfaces'][$interface][$type];
-            if (is_ipaddr($addr) && !is_linklocal($addr)) {
-                $listeners[] = $addr;
-            }
-        }
-
-        $viparr = &config_read_array('virtualip', 'vip');
-        foreach ($viparr as $vip) {
-            if ($vip['interface'] == $interface && is_ipaddr($vip['subnet'])) {
-                $listeners[] = $vip['subnet'];
-            }
-        }
-
-        /* addresses may have been read twice */
-        $listeners = array_unique($listeners);
     }
 
     chdir('/usr/local/www');
@@ -185,8 +168,8 @@ function webgui_generate_config($port, $cert, $key, $ca, $listeners)
 # Phalcon ui and api routing
 alias.url += ( "/ui/" => "/usr/local/opnsense/www/" )
 alias.url += ( "/api/"  => "/usr/local/opnsense/www/" )
-url.rewrite-if-not-file = ( "^/ui/([^\?]+)(\?(.*))?" => "/ui/index.php?_url=/$1&$3" ,
-                            "^/api/([^\?]+)(\?(.*))?" => "/api/api.php?_url=/$1&$3"
+url.rewrite-if-not-file = ( "^/ui/([^\?]+)(\?(.*))?" => "/ui/index.php?$3" ,
+                            "^/api/([^\?]+)(\?(.*))?" => "/api/api.php?$3"
 )
 
 EOD;
@@ -245,7 +228,7 @@ server.network-backend  = "writev"
 
 ## modules to load
 server.modules              =   (
-  "mod_access", "mod_expire", "mod_compress", "mod_redirect",
+  "mod_access", "mod_expire", "mod_compress", "mod_redirect", "mod_setenv",
   "mod_cgi", "mod_fastcgi","mod_alias", "mod_rewrite", "mod_openssl" {$lighty_modules}
 )
 
@@ -255,7 +238,7 @@ server.max-keep-alive-idle = 30
 ## a static document-root, for virtual-hosting take look at the
 ## server.virtual-* options
 server.document-root        = "/usr/local/www/"
-
+server.tag = "OPNsense"
 
 {$http_rewrite_rules}
 
@@ -376,7 +359,7 @@ EOD;
         $lighty_config .= "\n## ssl configuration\n";
         $lighty_config .= "ssl.engine = \"enable\"\n";
         $lighty_config .= "ssl.disable-client-renegotiation = \"enable\"\n";
-        $lighty_config .= "ssl.dh-file = \"/usr/local/etc/dh-parameters.4096\"\n";
+        $lighty_config .= "ssl.dh-file = \"" . get_dh_parameters(4096) . "\"\n";
         $lighty_config .= "ssl.ec-curve = \"secp384r1\"\n";
         $lighty_config .= "ssl.pemfile = \"/var/etc/{$cert_location}\"\n";
         if (!empty($ca)) {
@@ -407,9 +390,11 @@ EOD;
         } else {
             $lighty_config .= 'ssl.cipher-list = "'.$config['system']['webgui']['ssl-ciphers'].'"' . PHP_EOL;
         }
-        $lighty_config .= "setenv.add-response-header  = (\n";
-        $lighty_config .= "    \"Strict-Transport-Security\" => \"max-age=15768000;\"\n";
-        $lighty_config .= ")\n";
+        if (!empty($config['system']['webgui']['ssl-hsts'])) {
+            $lighty_config .= "setenv.add-response-header  = (\n";
+            $lighty_config .= "    \"Strict-Transport-Security\" => \"max-age=15768000;\"\n";
+            $lighty_config .= ")\n";
+        }
 
         $lighty_config .= "\n";
     }

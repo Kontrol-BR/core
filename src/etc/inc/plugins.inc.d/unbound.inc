@@ -1,33 +1,34 @@
 <?php
 
 /*
-    Copyright (C) 2015-2017 Franco Fichtner <franco@opnsense.org>
-    Copyright (C) 2015 Manuel Faux <mfaux@conf.at>
-    Copyright (C) 2014 Warren Baker <warren@decoy.co.za>
-    Copyright (C) 2004-2007 Scott Ullrich <sullrich@gmail.com>
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are met:
-
-    1. Redistributions of source code must retain the above copyright notice,
-       this list of conditions and the following disclaimer.
-
-    2. Redistributions in binary form must reproduce the above copyright
-       notice, this list of conditions and the following disclaimer in the
-       documentation and/or other materials provided with the distribution.
-
-    THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES,
-    INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
-    AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
-    AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
-    OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-    SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-    INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-    CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-    ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
-*/
+ * Copyright (C) 2018 Fabian Franz
+ * Copyright (C) 2015-2018 Franco Fichtner <franco@opnsense.org>
+ * Copyright (C) 2015 Manuel Faux <mfaux@conf.at>
+ * Copyright (C) 2014 Warren Baker <warren@decoy.co.za>
+ * Copyright (C) 2004-2007 Scott Ullrich <sullrich@gmail.com>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice,
+ *    this list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES,
+ * INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
+ * AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ * AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+ * OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
 
 function unbound_enabled()
 {
@@ -207,9 +208,6 @@ EOF;
     // Configure Domain Overrides
     unbound_add_domain_overrides();
 
-    // Configure Unbound statistics
-    $statistics = unbound_statistics();
-
     // Configure Unbound access-lists
     unbound_acls_config();
 
@@ -290,6 +288,7 @@ chroot: /var/unbound
 username: unbound
 directory: /var/unbound
 pidfile: /var/run/unbound.pid
+root-hints: /root.hints
 use-syslog: yes
 port: {$port}
 verbosity: {$verbosity}
@@ -325,8 +324,6 @@ rrset-cache-size: {$rrsetcachesize}m
 {$anchor_file}
 prefetch: {$prefetch}
 prefetch-key: {$prefetch_key}
-# Statistics
-{$statistics}
 # Interface IP(s) to bind to
 {$bindints}
 {$outgoingints}
@@ -358,9 +355,8 @@ include: /var/unbound/remotecontrol.conf
 
 EOD;
 
+    copy('/usr/local/etc/inc/plugins.inc.d/unbound/root.min.hints', '/var/unbound/root.hints');
     file_put_contents('/var/unbound/unbound.conf', $unboundconf);
-
-    return 0;
 }
 
 function unbound_remote_control_setup()
@@ -480,7 +476,6 @@ function unbound_add_domain_overrides($pvt = false)
         $result[$domain_key][] = $domain['ip'];
     }
 
-    // Domain overrides that have multiple entries need multiple stub-addr: added
     $domain_entries = "";
     foreach ($result as $domain => $ips) {
         if ($pvt == true) {
@@ -490,12 +485,11 @@ function unbound_add_domain_overrides($pvt = false)
                 $domain_entries .= "local-zone: \"$domain\" typetransparent\n";
             }
         } else {
-            $domain_entries .= "stub-zone:\n";
+            $domain_entries .= "forward-zone:\n";
             $domain_entries .= "\tname: \"$domain\"\n";
             foreach ($ips as $ip) {
-                $domain_entries .= "\tstub-addr: $ip\n";
+                $domain_entries .= "\tforward-addr: $ip\n";
             }
-            $domain_entries .= "\tstub-prime: no\n";
         }
     }
 
@@ -571,6 +565,29 @@ function unbound_add_host_entries()
                 $unbound_entries .= "local-data: \"{$config['system']['hostname']} AAAA {$lladdr6}\"\n";
             }
         }
+    }
+
+    if (isset($config['unbound']['enable_wpad'])) {
+        $webui_protocol = !empty($config['system']['webgui']['protocol']) ? $config['system']['webgui']['protocol'] : 'https';
+        $webui_port = !empty($config['system']['webgui']['port']) ? $config['system']['webgui']['port'] : 443;
+        // default domain
+        $system_host_fqdn = $config['system']['hostname'];
+        if (isset($config['system']['domain'])) {
+            $system_host_fqdn .= '.' . $config['system']['domain'];
+        }
+        $unbound_entries .= "local-data: \"wpad.{$domain} IN CNAME {$system_host_fqdn}\"\n";
+        $unbound_entries .= "local-data: \"wpad IN CNAME {$system_host_fqdn}\"\n";
+        $unbound_entries .= "local-data: '{$domain} IN TXT \"service: wpad:{$webui_protocol}://{$system_host_fqdn}:{$webui_port}/wpad.dat\"'\n";
+        // DHCP domains
+        $tmp_known_domains = array($domain);
+        foreach ($config['dhcpd'] as $dhcp_interface) {
+            if (isset($dhcp_interface['domain']) && !empty($dhcp_interface['domain']) && !in_array($dhcp_interface['domain'], $tmp_known_domains)) {
+                $unbound_entries .= "local-data: \"wpad.{$dhcp_interface['domain']} IN CNAME {$system_host_fqdn}\"\n";
+                $unbound_entries .= "local-data: '{$dhcp_interface['domain']} IN TXT \"service: wpad:{$webui_protocol}://{$system_host_fqdn}:{$webui_port}/wpad.dat\"'\n";
+                $tmp_known_domains[] = $dhcp_interface['domain'];
+            }
+        }
+        unset($tmp_known_domains); // remove temporary variable
     }
 
     /* Static Host entries */
@@ -666,67 +683,37 @@ function unbound_add_host_entries()
     file_put_contents('/var/unbound/host_entries.conf', $unbound_entries);
 }
 
-// Generation of Unbound statistics
-function unbound_statistics()
+function unbound_acls_subnets()
 {
     global $config;
 
-    if ($config['stats'] == "on") {
-        $stats_interval = $config['unbound']['stats_interval'];
-        $cumulative_stats = $config['cumulative_stats'];
-        if ($config['extended_stats'] == "on") {
-            $extended_stats = "yes";
-        } else {
-            $extended_stats = "no";
-        }
-    } else {
-        $stats_interval = "0";
-        $cumulative_stats = "no";
-        $extended_stats = "no";
-    }
-    /* XXX To do - add RRD graphs */
-    $stats = <<<EOF
-# Unbound Statistics
-statistics-interval: {$stats_interval}
-extended-statistics: yes
-statistics-cumulative: yes
-
-EOF;
-
-    return $stats;
-}
-
-function unbound_acls_config()
-{
-    global $config;
-
-    $aclcfg = "access-control: 127.0.0.1/32 allow\n";
-    $aclcfg .= "access-control: ::1 allow\n";
-    // Add our networks for active interfaces including localhost
     if (!empty($config['unbound']['active_interface'])) {
         $active_interfaces = array_flip(explode(",", $config['unbound']['active_interface']));
     } else {
         $active_interfaces = get_configured_interface_with_descr();
     }
 
-    $bindints = "";
+    /* add our networks for active interfaces including localhost */
+    $subnets = array('127.0.0.1/8', '::1/64');
+
     foreach ($active_interfaces as $ubif => $ifdesc) {
-        $ifip = get_interface_ip($ubif);
-        if (!empty($ifip)) {
-            $subnet_bits = get_interface_subnet($ubif);
-            $subnet_ip = gen_subnet($ifip, $subnet_bits);
-            if (!empty($subnet_bits) && !empty($subnet_ip)) {
-                $aclcfg .= "access-control: {$subnet_ip}/{$subnet_bits} allow\n";
-            }
+        foreach (legacy_getall_interface_addresses(get_real_interface($ubif)) as $subnet) {
+            $subnets[] = $subnet;
         }
-        $ifip = get_interface_ipv6($ubif);
-        if (!empty($ifip)) {
-            $subnet_bits = get_interface_subnetv6($ubif);
-            $subnet_ip = gen_subnetv6($ifip, $subnet_bits);
-            if (!empty($subnet_bits) && !empty($subnet_ip)) {
-                $aclcfg .= "access-control: {$subnet_ip}/{$subnet_bits} allow\n";
-            }
-        }
+    }
+
+    return $subnets;
+}
+
+function unbound_acls_config()
+{
+    global $config;
+
+    $subnets = unbound_acls_subnets();
+    $aclcfg = '';
+
+    foreach ($subnets as $subnet) {
+        $aclcfg .= "access-control: {$subnet} allow\n";
     }
 
     // Configure the custom ACLs
@@ -736,13 +723,16 @@ function unbound_acls_config()
             foreach ($unbound_acl['row'] as $network) {
                 if ($unbound_acl['aclaction'] == "allow snoop") {
                     $unbound_acl['aclaction'] = "allow_snoop";
+                } elseif ($unbound_acl['aclaction'] == "deny nonlocal") {
+                        $unbound_acl['aclaction'] = "deny_non_local";
+                } elseif ($unbound_acl['aclaction'] == "refuse nonlocal") {
+                        $unbound_acl['aclaction'] = "refuse_non_local";
                 }
                 $aclcfg .= "access-control: {$network['acl_network']}/{$network['mask']} {$unbound_acl['aclaction']}\n";
             }
         }
     }
 
-    // Write out Access list
     file_put_contents('/var/unbound/access_lists.conf', $aclcfg);
 }
 

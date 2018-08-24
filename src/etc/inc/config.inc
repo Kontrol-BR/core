@@ -51,14 +51,12 @@ require_once('plugins.inc');
 function alias_make_table($config)
 {
     global $aliastable;
-
     $aliastable = array();
-
-    if (isset($config['aliases']['alias'])) {
-        foreach ($config['aliases']['alias'] as $alias) {
-            if ($alias['name']) {
-                $aliastable[$alias['name']] = isset($alias['address']) ? $alias['address'] : null;
-            }
+    foreach ((new \OPNsense\Firewall\Alias())->aliasIterator() as $alias) {
+        if (strncmp($alias['type'], 'url', 3) !== 0) {
+            $aliastable[$alias['name']] = implode(" ", explode("\n", $alias['content']));
+        } else {
+            $aliastable[$alias['name']] = "";
         }
     }
 }

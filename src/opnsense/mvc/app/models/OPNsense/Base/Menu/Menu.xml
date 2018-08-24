@@ -19,11 +19,11 @@
         <Access cssClass="fa fa-users fa-fw">
             <Users order="10" url="/system_usermanager.php">
                 <All url="/system_usermanager.php*" visibility="hidden"/>
-                <Privileges url="/system_usermanager_addprivs.php*" visibility="hidden"/>
+                <Privileges url="/system_usermanager_addprivs.php?user*" visibility="hidden"/>
             </Users>
             <Groups order="20" url="/system_groupmanager.php">
                 <All url="/system_groupmanager.php*" visibility="hidden"/>
-                <Privileges url="/system_groupmanager_addprivs.php*" visibility="hidden"/>
+                <Privileges url="/system_usermanager_addprivs.php?group*" visibility="hidden"/>
             </Groups>
             <Servers order="30" url="/system_authservers.php">
                 <Edit url="/system_authservers.php*" visibility="hidden"/>
@@ -38,10 +38,10 @@
             </History>
         </Configuration>
         <Firmware cssClass="fa fa-building-o fa-fw">
-            <Updates order="10" url="/ui/core/firmware/#updates"/>
-            <Plugins order="20" url="/ui/core/firmware/#plugins"/>
-            <Packages order="30" url="/ui/core/firmware/#packages"/>
-            <Settings order="40" url="/ui/core/firmware/#settings"/>
+            <Updates order="10" url="/ui/core/firmware#updates"/>
+            <Plugins order="20" url="/ui/core/firmware#plugins"/>
+            <Packages order="30" url="/ui/core/firmware#packages"/>
+            <Settings order="40" url="/ui/core/firmware#settings"/>
             <Reporter order="50" url="/crash_reporter.php"/>
         </Firmware>
         <Gateways cssClass="fa fa-location-arrow fa-fw">
@@ -53,7 +53,7 @@
                 <List url="/system_gateway_groups.php*" visibility="hidden"/>
                 <Edit url="/system_gateway_groups_edit.php*" visibility="hidden"/>
             </Group>
-            <Log VisibleName="Log File" order="30" url="/diag_logs_gateways.php"/>
+            <LogFile VisibleName="Log File" order="30" url="/diag_logs_gateways.php"/>
         </Gateways>
         <HighAvailability VisibleName="High Availability" cssClass="fa fa-refresh fa-fw">
             <Settings order="100" url="/system_hasync.php"/>
@@ -61,7 +61,7 @@
         </HighAvailability>
         <Routes cssClass="fa fa-map-signs fa-fw">
             <Configuration order="10" url="/ui/routes" />
-            <Log order="100" VisibleName="Log File" url="/diag_logs_routing.php"/>
+            <LogFile order="100" VisibleName="Log File" url="/diag_logs_routing.php"/>
         </Routes>
         <Settings cssClass="fa fa-cogs fa-fw">
             <Administration url="/system_advanced_admin.php"/>
@@ -86,9 +86,7 @@
                 <Edit url="/system_crlmanager.php*" visibility="hidden"/>
             </Revocation>
         </Trust>
-        <Wizard url="/wizard.php?xml=system" cssClass="fa fa-magic fa-fw">
-            <Step url="/wizard.php?xml=system*" visibility="hidden"/>
-        </Wizard>
+        <Wizard url="/wizard.php?xml=system" cssClass="fa fa-magic fa-fw"/>
         <LogFiles order="150" VisibleName="Log Files" cssClass="fa fa-eye fa-fw">
             <General order="100" VisibleName="General" url="/diag_logs.php"/>
             <Configd order="150" VisibleName="Configd" url="/configd_logs.php"/>
@@ -108,7 +106,7 @@
             <Devices url="/interfaces_wireless.php">
                 <Edit url="/interfaces_wireless_edit.php*" visibility="hidden"/>
             </Devices>
-            <Log VisibleName="Log File" url="/diag_logs_wireless.php"/>
+            <LogFile VisibleName="Log File" url="/diag_logs_wireless.php"/>
         </Wireless>
         <PPP order="940" VisibleName="Point-to-Point" cssClass="fa fa-tty fa-fw">
             <Devices url="/interfaces_ppps.php">
@@ -134,7 +132,9 @@
             </VLAN>
         </Types>
         <Diagnostics order="960" cssClass="fa fa-medkit fa-fw">
-            <DNSLookup VisibleName="DNS Lookup" url="/diag_dns.php"/>
+            <DNSLookup VisibleName="DNS Lookup" url="/diag_dns.php">
+                <Edit url="/diag_dns.php*" visibility="hidden"/>
+            </DNSLookup>
             <PacketCapture VisibleName="Packet Capture" url="/diag_packet_capture.php"/>
             <Ping url="/diag_ping.php"/>
             <TestPort VisibleName="Port Probe" url="/diag_testport.php"/>
@@ -143,10 +143,9 @@
     </Interfaces>
     <Firewall order="40" cssClass="glyphicon glyphicon-fire">
         <Aliases order="10" cssClass="fa fa-list-alt fa-fw">
-            <View order="100" url="/firewall_aliases.php">
-                <Edit url="/firewall_aliases_edit.php*" visibility="hidden"/>
+            <View order="100" url="/ui/firewall/alias">
+                <item url="/ui/firewall/alias/*"/>
             </View>
-            <Import order="200" url="/firewall_aliases_import.php"/>
         </Aliases>
         <Rules order="20" cssClass="fa fa-check fa-fw" />
         <NAT order="30" cssClass="fa fa-exchange fa-fw">
@@ -239,7 +238,7 @@
             <Leases order="60" VisibleName="Lease Status" url="/diag_ipsec_leases.php"/>
             <SAD order="70" VisibleName="Security Association Database" url="/diag_ipsec_sad.php"/>
             <SPD order="80" VisibleName="Security Policy Database" url="/diag_ipsec_spd.php"/>
-            <Log order="90" VisibleName="Log File" url="/diag_logs_ipsec.php"/>
+            <LogFile order="90" VisibleName="Log File" url="/diag_logs_ipsec.php"/>
         </IPsec>
         <OpenVPN cssClass="fa fa-lock fa-fw" order="20">
             <Servers order="10" url="/vpn_openvpn_server.php">
@@ -256,7 +255,7 @@
                 <Edit url="/vpn_openvpn_export.php?*" visibility="hidden"/>
             </ClientExport>
             <Status order="60" VisibleName="Connection Status" url="/status_openvpn.php"/>
-            <Log order="70" VisibleName="Log File" url="/diag_logs_openvpn.php"/>
+            <LogFile order="70" VisibleName="Log File" url="/diag_logs_openvpn.php"/>
         </OpenVPN>
     </VPN>
     <Power order="70" cssClass="fa fa-plug">

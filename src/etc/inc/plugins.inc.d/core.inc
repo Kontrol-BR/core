@@ -95,7 +95,7 @@ function core_services()
     if (is_dpinger_enabled()) {
         $gateways_arr_all = return_gateways_array(true);
 
-        foreach($gateways_arr_all as $name => $gateway) {
+        foreach ($gateways_arr_all as $name => $gateway) {
             if (isset($gateway['monitor_disable'])) {
                 continue;
             }
@@ -171,4 +171,68 @@ function core_services()
     );
 
     return $services;
+}
+
+function core_cron()
+{
+    global $config;
+
+    $jobs = array();
+
+    $jobs[]['autocron'] = array('/usr/local/sbin/expiretable -v -t 3600 webConfiguratorlockout', '1');
+    $jobs[]['autocron'] = array('/usr/local/sbin/expiretable -v -t 3600 sshlockout', '2');
+    $jobs[]['autocron'] = array('/usr/local/sbin/expiretable -v -t 3600 virusprot', '3');
+    $jobs[]['autocron'] = array('/usr/local/etc/rc.expireaccounts', '5');
+
+    $jobs[]['autocron'] = array('/usr/local/sbin/ping_hosts.sh', '*/4');
+
+    if (!empty($config['system']['rrdbackup'])) {
+        $jobs[]['autocron'] = array(
+            '/usr/local/etc/rc.syshook.d/backup/20-rrd',
+            '0',
+            '*/' . $config['system']['rrdbackup']
+        );
+    }
+
+    if (!empty($config['system']['dhcpbackup'])) {
+        $jobs[]['autocron'] = array(
+            '/usr/local/etc/rc.syshook.d/backup/20-dhcpleases',
+            '0',
+            '*/' . $config['system']['dhcpbackup']
+        );
+    }
+
+    if (!empty($config['system']['netflowbackup'])) {
+        $jobs[]['autocron'] = array(
+            '/usr/local/etc/rc.syshook.d/backup/20-netflow',
+            '0',
+            '*/' . $config['system']['netflowbackup']
+        );
+    }
+
+    if (!empty($config['system']['captiveportalbackup'])) {
+        $jobs[]['autocron'] = array(
+            '/usr/local/etc/rc.syshook.d/backup/20-captiveportal',
+            '0',
+            '*/' . $config['system']['captiveportalbackup']
+        );
+    }
+
+    if (!empty($config['system']['dhparamusage'])) {
+        switch ($config['system']['dhparamusage']) {
+            case 'weekly':
+                $jobs[]['autocron'] = array('configctl system ssl dhparam', '30', '3', '*', '*', '0');
+                break;
+            case 'monthly':
+                $jobs[]['autocron'] = array('configctl system ssl dhparam', '30', '3', '1', '*', '*');
+                break;
+            default:
+                /* cron job operated by user manually or RFC 7919 */
+                break;
+        }
+    }
+
+    $jobs[]['autocron'] = array('configctl system remote backup', 0, 1);
+
+    return $jobs;
 }

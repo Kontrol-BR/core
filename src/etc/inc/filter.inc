@@ -180,8 +180,7 @@ function filter_configure_sync($verbose = false, $flush_states = false)
     // initialize fw plugin object
     $fw = filter_core_get_initialized_plugin_system();
     filter_core_bootstrap($fw);
-    $cnfint = $fw->getInterfaceMapping();
-
+    $cnfint = iterator_to_array($fw->getInterfaceMapping());
     plugins_firewall($fw);
 
     if (isset($config['filter']['rule'])) {
@@ -316,9 +315,7 @@ function filter_configure_sync($verbose = false, $flush_states = false)
     }
 
     if (isset($config['system']['gw_switch_default'])) {
-        $gateways_status = return_gateways_status(true);
-        $gateways_arr = return_gateways_array();
-        fixup_default_gateway($gateways_status, $gateways_arr);
+        fixup_default_gateway();
     }
 
     $aliases = filter_generate_aliases();
@@ -388,6 +385,9 @@ function filter_configure_sync($verbose = false, $flush_states = false)
     } else {
         $limitrules .= "set timeout { adaptive.start 0, adaptive.end 0 }\n";
     }
+    if (!empty($config['system']['state-policy'])) {
+        $limitrules .= "set state-policy if-bound\n";
+    }
 
     if (!empty($config['system']['maximumstates'])) {
         $limitrules .= "set limit states {$config['system']['maximumstates']}\n";
@@ -429,6 +429,9 @@ function filter_configure_sync($verbose = false, $flush_states = false)
     if (!@file_put_contents('/tmp/rules.debug', $rules, LOCK_EX)) {
         log_error("WARNING: Could not write new rules!");
         unlock($filterlck);
+        if ($verbose) {
+            echo "failed.\n";
+        }
         return;
     }
 
@@ -445,40 +448,33 @@ function filter_configure_sync($verbose = false, $flush_states = false)
      * then output the contents of the error to the caller
      */
     if ($rules_loading) {
-        /* XXX ALTQ not loaded message compat */
-        $altq_strip = 2;
-        if (count($rules_error) >= $altq_strip) {
-            foreach (range(1, $altq_strip) as $altq_unused) {
-                if (strpos($rules_error[0], 'ALTQ') !== false) {
-                    array_shift($rules_error);
-                }
-            }
-        }
+        $config_line = '';
 
-        $saved_line_error = $rules_error[0];
-        $config_line_error = '';
-
-        $line_error = explode(":", $rules_error[0]);
-        if (isset($line_error[1])) {
-            // only report issues with line numbers
+        /* only report issues with line numbers */
+        $line_error = explode(':', $rules_error[0]);
+        if (isset($line_error[1]) && (string)((int)$line_error[1]) == $line_error[1] && $line_error[1] > 0) {
             $line_number = $line_error[1];
             $line_split = file('/tmp/rules.debug');
             if (is_array($line_split)) {
-                $config_line_error = sprintf(' - ' . gettext('The line in question reads [%d]: %s'), $line_number, $line_split[$line_number-1]);
+                $config_line = sprintf(' - ' . gettext('The line in question reads [%s]: %s'), $line_number, $line_split[$line_number-1]);
             }
         }
 
         /* Brutal ugly hack but required -- PF is stuck, unwedge */
         if (strstr("$rules_error[0]", "busy")) {
             exec('/sbin/pfctl -d; /sbin/pfctl -e; /sbin/pfctl -f /tmp/rules.debug');
-            $error_msg = gettext("PF was wedged/busy and has been reset.");
-            file_notice("pf_busy", $error_msg, "pf_busy", "");
+            file_notice('pf_busy', gettext('PF was wedged/busy and has been reset.'), 'pf_busy', '');
         } else {
             exec('/sbin/pfctl -o basic -f /tmp/rules.debug.old 2>&1');
         }
 
-        file_notice('filter_load', sprintf(gettext('There were error(s) loading the rules: %s%s'), $saved_line_error, $config_line_error), 'Filter Reload', '');
+        file_notice('filter_load', sprintf(gettext('There were error(s) loading the rules: %s%s'), $rules_error[0], $config_line), 'Filter Reload', '');
         unlock($filterlck);
+
+        if ($verbose) {
+            echo "failed.\n";
+        }
+
         return;
     }
 
@@ -624,24 +620,24 @@ function filter_generate_aliases()
         $aliases .= "table <bogonsv6> persist file \"/usr/local/etc/bogonsv6\"\n";
     }
 
-    if (isset($config['aliases']['alias'])) {
-        $aliases .= "\n# User Aliases\n";
-        foreach ($config['aliases']['alias'] as $aliased) {
-            switch ($aliased['type']) {
-                case "urltable_ports":
-                case "url_ports":
-                    $tmp_ports = filter_core_get_url_port_alias($aliased['name']);
-                    $aliases .= "{$aliased['name']} = \"{ {$tmp_ports} }\"\n";
-                    break;
-                case "port":
-                    $tmp_ports = implode(" ", filter_core_get_port_alias($aliased['name']));
-                    $aliases .= "{$aliased['name']} = \"{ {$tmp_ports} }\"\n";
-                    break;
-                default:
-                    $aliases .= "table <{$aliased['name']}> persist\n";
-                    $aliases .= "{$aliased['name']} = \"<{$aliased['name']}>\"\n";
-                    break;
-            }
+    $aliases .= "\n# User Aliases\n";
+    foreach ((new \OPNsense\Firewall\Alias())->aliasIterator() as $aliased) {
+        switch ($aliased['type']) {
+            case "urltable_ports":
+            case "url_ports":
+                # a bit of a hack, but prevents the ruleset from not being able to load if these types are in
+                # the configuration.
+                $aliases .= "{$aliased['name']} = \"{ 0 <> 65535 }\"\n";
+                file_notice('filter_load', sprintf(gettext('URL port aliases types not supported [%s]'), $aliased['name']), 'Filter Reload', '');
+                break;
+            case "port":
+                $tmp_ports = implode(" ", filter_core_get_port_alias($aliased['name']));
+                $aliases .= "{$aliased['name']} = \"{ {$tmp_ports} }\"\n";
+                break;
+            default:
+                $aliases .= "table <{$aliased['name']}> persist\n";
+                $aliases .= "{$aliased['name']} = \"<{$aliased['name']}>\"\n";
+                break;
         }
     }
 

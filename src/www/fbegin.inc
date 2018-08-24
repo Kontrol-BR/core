@@ -62,6 +62,7 @@ if($need_alert_display == true) {
           <span class="icon-bar"></span>
         </button>
       </div>
+      <button class="toggle-sidebar" style="display:none"><i class="fa fa-chevron-left"></i></button>
       <div class="collapse navbar-collapse">
         <ul class="nav navbar-nav navbar-right">
           <li id="menu_messages"><?= get_menu_messages() ?></li>
@@ -182,17 +183,18 @@ if($need_alert_display == true) {
                 }
               } ?>
               <?php if (!empty($main_buttons)): foreach ($main_buttons as $button): ?>
-                <a href="<?=$button['href'];?>" class="btn btn-primary"><span class="glyphicon glyphicon-plus-sign __iconspacer"></span><?=$button['label'];?></a>
+                <a href="<?=$button['href'];?>" class="btn btn-primary"><i class="fa fa-plus-circle fa-fw"></i> <?= $button['label'] ?></a>
               <?php endforeach; endif; ?>
 
               <?php if (isset($widgetCollection)): ?>
                 <a href="#" id="updatepref" style="display:none" onclick="return updatePref();" class="btn btn-primary"><?=gettext("Save Settings");?></a>
-                <button id="add_widget_btn" type="button" class="btn btn-default" data-toggle="modal" data-target="#modal_widgets"><span class="glyphicon glyphicon-plus-sign __iconspacer"></span><?= gettext('Add widget') ?></button>
+                <button id="add_widget_btn" type="button" class="btn btn-default" data-toggle="modal" data-target="#modal_widgets"><i class="fa fa-plus-circle fa-fw"></i> <?= gettext('Add widget') ?></button>
                 <select class="selectpicker" data-width="120px" id="column_count">
-                    <option value="1" <?=$pconfig['column_count'] == "1" ? 'selected="selected"' : "";?>><?=gettext("1 column");?></option>
-                    <option value="2" <?=$pconfig['column_count'] == "2" ? 'selected="selected"' : "";?>><?=gettext("2 columns");?></option>
-                    <option value="3" <?=$pconfig['column_count'] == "3" ? 'selected="selected"' : "";?>><?=gettext("3 columns");?></option>
-                    <option value="4" <?=$pconfig['column_count'] == "4" ? 'selected="selected"' : "";?>><?=gettext("4 columns");?></option>
+                    <option value="1" <?=$pconfig['column_count'] == "1" ? 'selected="selected"' : "";?>><?= gettext('1 column');?></option>
+                    <option value="2" <?=$pconfig['column_count'] == "2" ? 'selected="selected"' : "";?>><?= sprintf(gettext('%s columns'), '2') ?></option>
+                    <option value="3" <?=$pconfig['column_count'] == "3" ? 'selected="selected"' : "";?>><?= sprintf(gettext('%s columns'), '3') ?></option>
+                    <option value="4" <?=$pconfig['column_count'] == "4" ? 'selected="selected"' : "";?>><?= sprintf(gettext('%s columns'), '4') ?></option>
+                    <option value="6" <?=$pconfig['column_count'] == "6" ? 'selected="selected"' : "";?>><?= sprintf(gettext('%s columns'), '6') ?></option>
                 </select>
               <?php endif; ?>
              </form>

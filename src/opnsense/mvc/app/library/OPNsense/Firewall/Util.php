@@ -29,6 +29,7 @@
 namespace OPNsense\Firewall;
 
 use \OPNsense\Core\Config;
+use \OPNsense\Firewall\Alias;
 
 /**
  * Class Util, common static firewall support functions
@@ -36,6 +37,11 @@ use \OPNsense\Core\Config;
  */
 class Util
 {
+    /**
+     * @var null|Alias reference to alias object
+     */
+    private static $aliasObject = null;
+
     /**
      * is provided address an ip address.
      * @param string $network address
@@ -71,13 +77,25 @@ class Util
     /**
      * check if name exists in alias config section
      * @param string $name name
+     * @param boolean $valid check if the alias can safely be used
      * @return boolean
+     * @throws \OPNsense\Base\ModelException
      */
-    public static function isAlias($name)
+    public static function isAlias($name, $valid = false)
     {
-        if (!empty($name) && !empty(Config::getInstance()->object()->aliases)) {
-            foreach (Config::getInstance()->object()->aliases->children() as $node) {
-                if ($node->name == $name) {
+        if (self::$aliasObject == null) {
+            // Cache the alias object to avoid object creation overhead.
+            self::$aliasObject = new Alias();
+        }
+        if (!empty($name)) {
+            foreach (self::$aliasObject->aliasIterator() as $alias) {
+                if ($alias['name'] == $name) {
+                    if ($valid) {
+                        // check validity for port type aliases
+                        if (preg_match("/port/i", $alias['type']) && trim($alias['content']) == "") {
+                            return false;
+                        }
+                    }
                     return true;
                 }
             }
@@ -124,7 +142,7 @@ class Util
      * @param boolean $allow_range ranges allowed
      * @return boolean
      */
-    public function isPort($number, $allow_range = true)
+    public static function isPort($number, $allow_range = true)
     {
         $tmp = explode(':', $number);
         foreach ($tmp as $port) {
@@ -136,6 +154,20 @@ class Util
             }
         }
         if (($allow_range && count($tmp) <=2) || count($tmp) == 1) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Check if provided string is a valid domain name
+     * @param string $domain
+     * @return false|int
+     */
+    public static function isDomain($domain)
+    {
+        $pattern = '/^(?:(?:[a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])\.)*(?:[a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])$/i';
+        if (preg_match($pattern, $domain)) {
             return true;
         }
         return false;

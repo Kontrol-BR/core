@@ -29,12 +29,12 @@
 namespace OPNsense\Firewall\FieldTypes;
 
 use OPNsense\Base\FieldTypes\BaseField;
+use OPNsense\Base\Validators\CallbackValidator;
 use Phalcon\Validation\Validator\Regex;
 use Phalcon\Validation\Validator\ExclusionIn;
-use Phalcon\Validation\Validator\Callback;
 
 /**
- * Class AliasField
+ * Class AliasNameField
  * @package OPNsense\Base\FieldTypes
  */
 class AliasNameField extends BaseField
@@ -51,7 +51,7 @@ class AliasNameField extends BaseField
 
     /**
      * retrieve field validators for this field type
-     * @return array returns Text/regex validator
+     * @return array returns list of validators
      */
     public function getValidators()
     {
@@ -62,31 +62,27 @@ class AliasNameField extends BaseField
         if ($this->internalValue != null) {
             // add validations to deny reserved keywords, service/protocol names and invalid characters
             $validators[] = new ExclusionIn(array(
-                'message' => sprintf(gettext('The name cannot be the internally reserved keyword "%s".'),
-                    (string)$this),
-                'domain' => $reservedwords)
-            );
+                'message' => sprintf(
+                    gettext('The name cannot be the internally reserved keyword "%s".'),
+                    (string)$this
+                ),
+                'domain' => $reservedwords));
             $validators[] = new Regex(array(
                 'message' => sprintf(gettext(
                     'The name must be less than 32 characters long and may only consist of the following characters: %s'
                 ), 'a-z, A-Z, 0-9, _'),
-                'pattern'=>'/[_0-9a-zA-z]{1,32}/')
-            );
-            $validators[] = new Callback(
+                'pattern'=>'/[_0-9a-zA-z]{1,32}/'));
+            $validators[] = new CallbackValidator(
                 [
-                    "message" => gettext('Reserved protocol or service names may not be used'),
-                    "callback" => function($data) {
-                        foreach ($data as $key => $value){
-                            if (getservbyname($value, 'tcp') ||
-                                    getservbyname($value, 'udp') || getprotobyname($value)) {
-                                return false;
-                            }
+                    "callback" => function ($value) {
+                        if (getservbyname($value, 'tcp') ||
+                            getservbyname($value, 'udp') || getprotobyname($value)) {
+                            return array(gettext('Reserved protocol or service names may not be used'));
                         }
-                        return true;
+                        return array();
                     }
                 ]
             );
-
         }
         return $validators;
     }

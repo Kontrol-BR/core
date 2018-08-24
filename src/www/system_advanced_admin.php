@@ -49,6 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $pconfig['ssl-certref'] = $config['system']['webgui']['ssl-certref'];
     $pconfig['compression'] = isset($config['system']['webgui']['compression']) ? $config['system']['webgui']['compression'] : null;
     $pconfig['ssl-ciphers'] = !empty($config['system']['webgui']['ssl-ciphers']) ? explode(':', $config['system']['webgui']['ssl-ciphers']) : array();
+    $pconfig['ssl-hsts'] = isset($config['system']['webgui']['ssl-hsts']);
     $pconfig['disablehttpredirect'] = isset($config['system']['webgui']['disablehttpredirect']);
     $pconfig['httpaccesslog'] = isset($config['system']['webgui']['httpaccesslog']);
     $pconfig['disableconsolemenu'] = isset($config['system']['disableconsolemenu']);
@@ -59,6 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     $pconfig['nohttpreferercheck'] = isset($config['system']['webgui']['nohttpreferercheck']);
     $pconfig['althostnames'] = $config['system']['webgui']['althostnames'];
     $pconfig['serialspeed'] = $config['system']['serialspeed'];
+    $pconfig['serialusb'] = isset($config['system']['serialusb']);
     $pconfig['primaryconsole'] = $config['system']['primaryconsole'];
     $pconfig['secondaryconsole'] = $config['system']['secondaryconsole'];
     $pconfig['enablesshd'] = $config['system']['ssh']['enabled'];
@@ -117,6 +119,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $config['system']['webgui']['ssl-ciphers'] != $newciphers ||
             $config['system']['webgui']['interfaces'] != $newinterfaces ||
             (empty($pconfig['httpaccesslog'])) != empty($config['system']['webgui']['httpaccesslog']) ||
+            (empty($pconfig['ssl-hsts'])) != empty($config['system']['webgui']['ssl-hsts']) ||
             ($pconfig['disablehttpredirect'] == "yes") != !empty($config['system']['webgui']['disablehttpredirect']);
 
         $config['system']['webgui']['protocol'] = $pconfig['webguiproto'];
@@ -125,6 +128,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $config['system']['webgui']['ssl-ciphers'] = $newciphers;
         $config['system']['webgui']['interfaces'] = $newinterfaces;
         $config['system']['webgui']['compression'] = $pconfig['compression'];
+
+        if (!empty($pconfig['ssl-hsts'])) {
+            $config['system']['webgui']['ssl-hsts'] = true;
+        } elseif (isset($config['system']['webgui']['ssl-hsts'])) {
+            unset($config['system']['webgui']['ssl-hsts']);
+        }
 
         if (!empty($pconfig['session_timeout'])) {
             $config['system']['webgui']['session_timeout'] = $pconfig['session_timeout'];
@@ -178,6 +187,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $config['system']['serialspeed'] = $pconfig['serialspeed'];
         } elseif (isset($config['system']['serialspeed'])) {
             unset($config['system']['serialspeed']);
+        }
+
+        if (!empty($pconfig['serialusb'])) {
+            $config['system']['serialusb'] = true;
+        } elseif (isset($config['system']['serialusb'])) {
+            unset($config['system']['serialusb']);
         }
 
         if (!empty($pconfig['primaryconsole'])) {
@@ -478,6 +493,16 @@ $(document).ready(function() {
                 </td>
               </tr>
               <tr>
+                <td><a id="help_for_sslhsts" href="#" class="showhelp"><i class="fa fa-info-circle"></i></a> <?=gettext('HTTP Strict Transport Security') ?></td>
+                <td>
+                  <input name="ssl-hsts" type="checkbox" value="yes" <?= empty($pconfig['ssl-hsts']) ? '' : 'checked="checked"' ?>/>
+                  <?= gettext('Enable HTTP Strict Transport Security') ?>
+                  <div class="hidden" data-for="help_for_sslhsts">
+                    <?=gettext("HTTP Strict Transport Security (HSTS) is a web security policy mechanism that helps to protect websites against protocol downgrade attacks and cookie hijacking.");?>
+                  </div>
+                </td>
+              </tr>
+              <tr>
                 <td><a id="help_for_webguiport" href="#" class="showhelp"><i class="fa fa-info-circle"></i></a> <?=gettext("TCP port"); ?></td>
                 <td>
                   <input name="webguiport" id="webguiport" type="text" value="<?=$pconfig['webguiport'];?>" placeholder="<?= $pconfig['webguiproto'] == 'https' ? '443' : '80' ?>" />
@@ -742,6 +767,13 @@ $(document).ready(function() {
                   <div class="hidden" data-for="help_for_serialspeed">
                     <?=gettext("Allows selection of different speeds for the serial console port."); ?>
                   </div>
+                </td>
+              </tr>
+              <tr>
+                <td><i class="fa fa-info-circle text-muted"></i></a> <?= gettext('USB-based serial') ?></td>
+                <td>
+                  <input name="serialusb" type="checkbox" value="yes" <?= empty($pconfig['serialusb']) ? '' : 'checked="checked"' ?>  />
+                  <?= gettext('Use USB-based serial ports') ?>
                 </td>
               </tr>
               <tr>

@@ -193,10 +193,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $subnet_start = gen_subnetv6($ifcfgip, $ifcfgsn);
             $subnet_end = gen_subnetv6_max($ifcfgip, $ifcfgsn);
 
+            $range_from = $pconfig['range_from'];
+            $range_to = $pconfig['range_to'];
+
+            if (isset($config['interfaces'][$if]['dhcpd6track6allowoverride'])) {
+                $range_from = make_ipv6_64_address($ifcfgip, $pconfig['range_from']);
+                $range_to = make_ipv6_64_address($ifcfgip, $pconfig['range_to']);
+            }
+
             if (!empty($pconfig['range_from']) && !empty($pconfig['range_to'])) {
                 if (is_ipaddrv6($ifcfgip) && !empty($pconfig['range_from']) && !empty($pconfig['range_to'])) {
-                    if ((!is_inrange_v6($pconfig['range_from'], $subnet_start, $subnet_end)) ||
-                        (!is_inrange_v6($pconfig['range_to'], $subnet_start, $subnet_end))) {
+                    if ((!is_inrange_v6($range_from, $subnet_start, $subnet_end)) ||
+                        (!is_inrange_v6($range_to, $subnet_start, $subnet_end))) {
                         $input_errors[] = gettext("The specified range lies outside of the current subnet.");
                     }
                 }
@@ -321,8 +329,20 @@ legacy_html_escape_form_data($pconfig);
 
 include("head.inc");
 
-?>
+$wifcfgip = get_interface_ipv6($if);
+$wifcfgsn = get_interface_subnetv6($if);
 
+if ($config['interfaces'][$if]['ipaddrv6'] == 'track6') {
+    $prefix_array = array();
+    $prefix_array = explode(':', $wifcfgip);
+    $prefix_array[4] = '0';
+    $prefix_array[5] = '0';
+    $prefix_array[6] = '0';
+    $prefix_array[7] = '0';
+    $wifprefix = Net_IPv6::compress(implode(':', $prefix_array));
+}
+
+?>
 <body>
 <script>
   $( document ).ready(function() {
@@ -431,28 +451,41 @@ include("head.inc");
                     </tr>
                     <tr>
                       <td><i class="fa fa-info-circle text-muted"></i> <?=gettext("Subnet");?></td>
-                      <td>
-                        <?=gen_subnetv6($config['interfaces'][$if]['ipaddrv6'], $config['interfaces'][$if]['subnetv6']);?>
-                      </td>
+<?php if (isset($config['interfaces'][$if]['dhcpd6track6allowoverride'])): ?>
+                      <td><?= gettext('Prefix Delegation') ?></td>
+<?php else: ?>
+                      <td><?= gen_subnetv6($wifcfgip, $wifcfgsn) ?></td>
+<?php endif ?>
                     </tr>
                     <tr>
                       <td><i class="fa fa-info-circle text-muted"></i> <?=gettext("Subnet mask");?></td>
-                      <td>
-                        <?=htmlspecialchars($config['interfaces'][$if]['subnetv6']);?> <?=gettext("bits");?>
-                      </td>
+<?php if (isset($config['interfaces'][$if]['dhcpd6track6allowoverride'])): ?>
+                      <td><?= gettext('Prefix Delegation') ?></td>
+<?php else: ?>
+                      <td><?= htmlspecialchars($wifcfgsn) ?> <?= gettext('bits') ?></td>
+<?php endif ?>
                     </tr>
-                      <tr>
+<?php if(isset($config['interfaces'][$if]['dhcpd6track6allowoverride'])): ?>
+                     <tr>
+                      <td><i class="fa fa-info-circle text-muted"></i> <?=gettext("Current LAN IPv6 prefix");?></td>
+                      <td><?= htmlspecialchars($wifprefix) ?></td>
+                    </tr>
+<?php endif ?>
+                    <tr>
                       <td><i class="fa fa-info-circle text-muted"></i> <?=gettext("Available range");?></td>
                       <td>
 <?php
-                        $range_from = gen_subnetv6($config['interfaces'][$if]['ipaddrv6'], $config['interfaces'][$if]['subnetv6']);
+                        $range_from = gen_subnetv6($wifcfgip, $wifcfgsn);
                         $range_from++;
-                        $range_to = gen_subnetv6_max($config['interfaces'][$if]['ipaddrv6'], $config['interfaces'][$if]['subnetv6']);?>
+                        $range_to = gen_subnetv6_max($wifcfgip, $wifcfgsn);?>
                         <?=$range_from;?> - <?=$range_to;?>
+<?php if (isset($config['interfaces'][$if]['dhcpd6track6allowoverride'])): ?>
+                        <?= gettext('Prefix delegation subnet will be prefixed to the available range.') ?>
+<?php endif ?>
                       </td>
                     </tr>
                     <tr>
-                      <td><i class="fa fa-info-circle text-muted"></i> <?=gettext("Range");?></td>
+                      <td><a id="help_for_range" href="#" class="showhelp"><i class="fa fa-info-circle"></i></a> <?=gettext("Range");?></td>
                       <td>
                         <table class="table table-condensed">
                           <thead>
@@ -468,6 +501,9 @@ include("head.inc");
                             </tr>
                           </tbody>
                         </table>
+                        <div class="hidden" data-for="help_for_range">
+                            <?= gettext("When using a static WAN address, the range should be entered using the full IPv6 address. " .
+                            "When using a dynamic WAN address, only enter the suffix part (i.e. ::1:2:3:4)."); ?>
                       </td>
                     </tr>
                     <tr>
@@ -642,7 +678,7 @@ include("head.inc");
                             foreach($numberoptions as $item):?>
                               <tr>
                                 <td>
-                                  <div style="cursor:pointer;" class="act-removerow btn btn-default btn-xs" alt="remove"><span class="glyphicon glyphicon-minus"></span></div>
+                                  <div style="cursor:pointer;" class="act-removerow btn btn-default btn-xs" alt="remove"><i class="fa fa-minus fa-fw"></i></div>
                                 </td>
                                 <td>
                                   <input name="numberoptions_number[]" type="text" value="<?=$item['number'];?>" />
@@ -689,7 +725,7 @@ include("head.inc");
                             <tfoot>
                               <tr>
                                 <td colspan="4">
-                                  <div id="addNew" style="cursor:pointer;" class="btn btn-default btn-xs" alt="add"><span class="glyphicon glyphicon-plus"></span></div>
+                                  <div id="addNew" style="cursor:pointer;" class="btn btn-default btn-xs" alt="add"><i class="fa fa-plus fa-fw"></i></div>
                                 </td>
                               </tr>
                             </tfoot>
@@ -725,8 +761,8 @@ include("head.inc");
                       <td><?=gettext("IPv6 address");?></td>
                       <td><?=gettext("Hostname");?></td>
                       <td><?=gettext("Description");?></td>
-                      <td>
-                        <a href="services_dhcpv6_edit.php?if=<?=$if;?>" class="btn btn-default btn-xs"><span class="glyphicon glyphicon-plus"></span></a>
+                      <td class="text-nowrap">
+                        <a href="services_dhcpv6_edit.php?if=<?=$if;?>" class="btn btn-default btn-xs"><i class="fa fa-plus fa-fw"></i></a>
                       </td>
                     </tr>
 <?php
@@ -738,9 +774,9 @@ include("head.inc");
                       <td><?=isset($mapent['ipaddrv6']) ? htmlspecialchars($mapent['ipaddrv6']) : "";?></td>
                       <td><?=htmlspecialchars($mapent['hostname']);?></td>
                       <td><?=htmlspecialchars($mapent['descr']);?></td>
-                      <td>
-                        <a href="services_dhcpv6_edit.php?if=<?=$if;?>&amp;id=<?=$i;?>" class="btn btn-default btn-xs"><span class="glyphicon glyphicon-pencil"></span></a>
-                        <button type="button" data-if="<?=$if;?>" data-id="<?=$i;?>" class="act_delete_static btn btn-xs btn-default"><span class="fa fa-trash text-muted"></span></button>
+                      <td class="text-nowrap">
+                        <a href="services_dhcpv6_edit.php?if=<?=$if;?>&amp;id=<?=$i;?>" class="btn btn-default btn-xs"><i class="fa fa-pencil fa-fw"></i></a>
+                        <button type="button" data-if="<?=$if;?>" data-id="<?=$i;?>" class="act_delete_static btn btn-xs btn-default"><i class="fa fa-trash fa-fw"></i></button>
                       </td>
                     </tr>
 <?php

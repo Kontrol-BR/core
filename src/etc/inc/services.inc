@@ -113,7 +113,7 @@ function services_radvd_configure($blacklist = array())
 
     /* handle manually configured DHCP6 server settings first */
     foreach ($config['dhcpdv6'] as $dhcpv6if => $dhcpv6ifconf) {
-        if (isset($config['interfaces'][$dhcpv6if]['track6-interface'])) {
+        if (isset($config['interfaces'][$dhcpv6if]['track6-interface']) && !isset($config['interfaces'][$dhcpv6if]['dhcpd6track6allowoverride'])) {
             continue;
         } elseif (!isset($config['interfaces'][$dhcpv6if]['enable'])) {
             continue;
@@ -134,7 +134,7 @@ function services_radvd_configure($blacklist = array())
         }
 
         $ifcfgipv6 = get_interface_ipv6($dhcpv6if);
-        if (!is_ipaddrv6($ifcfgipv6)) {
+        if (!is_ipaddrv6($ifcfgipv6) && !isset($config['interfaces'][$dhcpv6if]['dhcpd6track6allowoverride'])) {
             continue;
         }
 
@@ -448,6 +448,7 @@ function services_dhcpdv4_configure($verbose = false)
 option domain-name "{$config['system']['domain']}";
 option ldap-server code 95 = text;
 option arch code 93 = unsigned integer 16; # RFC4578
+option pac-webui code 252 = text;
 {$custoptions}
 default-lease-time 7200;
 max-lease-time 86400;
@@ -804,6 +805,18 @@ EOD;
             $dhcpdconf .= "  option tftp-server-name \"{$dhcpifconf['tftp']}\";\n";
         }
 
+        // add pac url if it applies
+        if (isset($dhcpifconf['wpad']) && !empty($config['system']['hostname']) && !empty($config['system']['domain'])) {
+            $protocol = !empty($config['system']['webgui']['protocol']) ? $config['system']['webgui']['protocol'] : 'https';
+            // take hostname from system settings - it can be used to be resolved to anything based on client IP
+            $host = implode('.', array('wpad', $config['system']['domain']));
+            $default_port = (isset($config['system']['webgui']['protocol']) && $config['system']['webgui']['protocol'] == 'https') ? 443 : 80;
+            $port = !empty($config['system']['webgui']['port']) ? $config['system']['webgui']['port'] : $default_port;
+            $webui_url = "$protocol://$host:$port/wpad.dat";
+
+            $dhcpdconf .= "  option pac-webui \"$webui_url\";\n";
+        }
+
         // Handle option, number rowhelper values
         if (isset($dhcpifconf['numberoptions']['item'])) {
             $dhcpdconf .= "\n";
@@ -829,6 +842,8 @@ EOD;
             if (!empty($dhcpifconf['filename']) && !empty($dhcpifconf['filename32']) && !empty($dhcpifconf['filename64'])) {
                 $dhcpdconf .= "  if option arch = 00:06 {\n";
                 $dhcpdconf .= "    filename \"{$dhcpifconf['filename32']}\";\n";
+                $dhcpdconf .= "  } else if option arch = 00:07 {\n";
+                $dhcpdconf .= "    filename \"{$dhcpifconf['filename64']}\";\n";
                 $dhcpdconf .= "  } else if option arch = 00:09 {\n";
                 $dhcpdconf .= "    filename \"{$dhcpifconf['filename64']}\";\n";
                 $dhcpdconf .= "  } else {\n";
@@ -937,6 +952,7 @@ EOD;
                 $newzone['dns-servers'] = array($dhcpifconf['ddnsdomainprimary']);
                 $newzone['ddnsdomainkeyname'] = $dhcpifconf['ddnsdomainkeyname'];
                 $newzone['ddnsdomainkey'] = $dhcpifconf['ddnsdomainkey'];
+                $newzone['ddnsdomainalgorithm'] = !empty($dhcpifconf['ddnsdomainalgorithm']) ? $dhcpifconf['ddnsdomainalgorithm'] : "hmac-md5";
                 $ddns_zones[] = $newzone;
             }
         }
@@ -999,7 +1015,7 @@ function services_dhcpd_zones($ddns_zones)
                     if (!empty($zone['ddnsdomainkeyname']) && !empty($zone['ddnsdomainkey'])) {
                         if (!in_array($zone['ddnsdomainkeyname'], $added_keys)) {
                             $dhcpdconf .= "key {$zone['ddnsdomainkeyname']} {\n";
-                            $dhcpdconf .= "  algorithm hmac-md5;\n";
+                            $dhcpdconf .= "  algorithm {$zone['ddnsdomainalgorithm']};\n";
                             $dhcpdconf .= "  secret {$zone['ddnsdomainkey']};\n";
                             $dhcpdconf .= "}\n";
                             $added_keys[] = $zone['ddnsdomainkeyname'];
@@ -1088,33 +1104,46 @@ function services_dhcpdv6_configure($blacklist = array(), $verbose = false)
             $trackifname = $config['interfaces'][$ifname]['track6-interface'];
             $trackcfg = $config['interfaces'][$trackifname];
             $pdlen = calculate_ipv6_delegation_length($trackifname);
-            $ifcfgipv6arr =explode(":", $ifcfgipv6);
             $dhcpdv6cfg[$ifname] = array();
             $dhcpdv6cfg[$ifname]['enable'] = true;
-            /* range */
-            $ifcfgipv6arr[7] = "1000";
-            $dhcpdv6cfg[$ifname]['range'] = array();
-            $dhcpdv6cfg[$ifname]['range']['from'] = Net_IPv6::compress(implode(":", $ifcfgipv6arr));
-            $ifcfgipv6arr[7] = "2000";
-            $dhcpdv6cfg[$ifname]['range']['to'] = Net_IPv6::compress(implode(":", $ifcfgipv6arr));
-            /* prefix length > 0? We can add dhcp6 prefix delegation server */
-            if ($pdlen > 2) {
-                $pdlenmax = $pdlen;
-                $pdlenhalf = $pdlenmax -1;
-                $pdlenmin = (64 - ceil($pdlenhalf / 4));
+            if (!isset($config['interfaces'][$ifname]['dhcpd6track6allowoverride']) || !isset($config['dhcpdv6'][$ifname]['enable'])) {
+                /* fixed range */
+                $ifcfgipv6arr = $ifcfgipv6arr = explode(':', $ifcfgipv6);
+                $ifcfgipv6arr[7] = '1000';
+                $dhcpdv6cfg[$ifname]['range'] = array();
+                $dhcpdv6cfg[$ifname]['range']['from'] = Net_IPv6::compress(implode(':', $ifcfgipv6arr));
+                $ifcfgipv6arr[7] = '2000';
+                $dhcpdv6cfg[$ifname]['range']['to'] = Net_IPv6::compress(implode(':', $ifcfgipv6arr));
+
+                /* prefix length > 0? We can add dhcp6 prefix delegation server */
+                if ($pdlen > 2) {
+                    $pdlenmax = $pdlen;
+                    $pdlenhalf = $pdlenmax - 1;
+                    $pdlenmin = 64 - ceil($pdlenhalf / 4);
+                    $dhcpdv6cfg[$ifname]['prefixrange'] = array();
+                    $dhcpdv6cfg[$ifname]['prefixrange']['prefixlength'] = $pdlenmin;
+
+                    /* set the delegation start to half the current address block */
+                    $range = Net_IPv6::parseAddress($ifcfgipv6, (64 - $pdlenmax));
+                    $range['start'] = Net_IPv6::getNetmask($range['end'], (64 - $pdlenhalf));
+
+                    /* set the end range to a multiple of the prefix delegation size, required by dhcpd */
+                    $range = Net_IPv6::parseAddress($range['end'], (64 - $pdlenhalf));
+                    $range['end'] = Net_IPv6::getNetmask($range['end'], (64 - round($pdlen / 2)));
+
+                    $dhcpdv6cfg[$ifname]['prefixrange']['from'] = Net_IPv6::compress($range['start']);
+                    $dhcpdv6cfg[$ifname]['prefixrange']['to'] = Net_IPv6::compress($range['end']);
+                }
+            } else {
+                /* get config entry and marry it to the live prefix */
+                $dhcpdv6cfg[$ifname]['range'] = array();
+                $dhcpdv6cfg[$ifname]['range']['from'] = make_ipv6_64_address($ifcfgipv6, $config['dhcpdv6'][$ifname]['range']['from']);
+                $dhcpdv6cfg[$ifname]['range']['to'] = make_ipv6_64_address($ifcfgipv6, $config['dhcpdv6'][$ifname]['range']['to']);
+
                 $dhcpdv6cfg[$ifname]['prefixrange'] = array();
-                $dhcpdv6cfg[$ifname]['prefixrange']['prefixlength'] = $pdlenmin;
-
-                /* set the delegation start to half the current address block */
-                $range = Net_IPv6::parseAddress($ifcfgipv6, (64 - $pdlenmax));
-                $range['start'] = Net_IPv6::getNetmask($range['end'], (64 - $pdlenhalf));
-
-                /* set the end range to a multiple of the prefix delegation size, required by dhcpd */
-                $range = Net_IPv6::parseAddress($range['end'], (64 - $pdlenhalf));
-                $range['end'] = Net_IPv6::getNetmask($range['end'], (64 - round($pdlen / 2)));
-
-                $dhcpdv6cfg[$ifname]['prefixrange']['from'] = Net_IPv6::compress($range['start']);
-                $dhcpdv6cfg[$ifname]['prefixrange']['to'] = Net_IPv6::compress($range['end']);
+                $dhcpdv6cfg[$ifname]['prefixrange']['prefixlength'] = $config['dhcpdv6'][$ifname]['prefixrange']['prefixlength'];
+                $dhcpdv6cfg[$ifname]['prefixrange']['from'] = $config['dhcpdv6'][$ifname]['prefixrange']['from'];
+                $dhcpdv6cfg[$ifname]['prefixrange']['to'] = $config['dhcpdv6'][$ifname]['prefixrange']['to'];
             }
         }
     }
@@ -1198,7 +1227,7 @@ EOD;
         if (is_ipaddrv6($ifcfgipv6)) {
             $dhcpdv6conf .= "\nsubnet6 {$subnetv6}/{$ifcfgsnv6}";
         } elseif (!empty($dhcpv6ifconf['range']['from'])) {
-            $subnet6 = gen_subnetv6($dhcpv6ifconf['range']['from'], "64");
+            $subnet6 = gen_subnetv6($dhcpv6ifconf['range']['from'], '64', !isset($dhcpdv6cfg[$ifname]['dhcpd6track6allowoverride']));
             $dhcpdv6conf .= "\nsubnet6 {$subnet6}/64";
         }
         $dhcpdv6conf .= " {\n";

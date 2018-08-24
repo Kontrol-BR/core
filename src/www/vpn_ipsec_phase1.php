@@ -177,9 +177,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     // For RSA methods, require the CA/Cert.
     switch ($method) {
         case "eap-tls":
+        case "psk_eap-tls":
         case "eap-mschapv2":
+        case "rsa_eap-mschapv2":
         case "eap-radius":
-          if ($pconfig['iketype'] != 'ikev2') {
+          if (!in_array($pconfig['iketype'], array('ikev2', 'ike'))) {
               $input_errors[] = sprintf(gettext("%s can only be used with IKEv2 type VPNs."), strtoupper($method));
           }
           if ($method == 'eap-radius' && empty($pconfig['authservers'])) {
@@ -235,21 +237,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 }
             }
             $t++;
-        }
-    }
-
-    if (!empty($config['ipsec']['phase2'])) {
-        foreach ($config['ipsec']['phase2'] as $phase2) {
-            if ($phase2['ikeid'] == $pconfig['ikeid']) {
-                if (($pconfig['protocol'] == "inet") && ($phase2['mode'] == "tunnel6")) {
-                    $input_errors[] = gettext("There is a Phase 2 using IPv6, you cannot use IPv4.");
-                    break;
-                }
-                if (($pconfig['protocol'] == "inet6") && ($phase2['mode'] == "tunnel")) {
-                    $input_errors[] = gettext("There is a Phase 2 using IPv4, you cannot use IPv6.");
-                    break;
-                }
-            }
         }
     }
 
@@ -324,7 +311,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         }
     }
 
-    if (!empty($pconfig['iketype']) && $pconfig['iketype'] != "ikev1" && $pconfig['iketype'] != "ikev2") {
+    if (!empty($pconfig['iketype']) && !in_array($pconfig['iketype'], array("ike", "ikev1", "ikev2"))) {
         $input_errors[] = gettext('Invalid argument for key exchange protocol version.');
     }
 
@@ -434,7 +421,7 @@ include("head.inc");
 <script>
     $( document ).ready(function() {
         $("#iketype").change(function(){
-            if ($(this).val() == 'ikev2') {
+            if (['ike', 'ikev2'].includes($(this).val())) {
                 $("#mode").prop( "disabled", true );
                 $("#mode_tr").hide();
             } else {
@@ -471,7 +458,9 @@ include("head.inc");
             $(".auth_opt :input").prop( "disabled", true );
             switch ($("#authentication_method").val()) {
                 case 'eap-tls':
+                case 'psk_eap-tls':
                 case 'eap-mschapv2':
+                case 'rsa_eap-mschapv2':
                     $(".auth_eap_tls").show();
                     $(".auth_eap_tls :input").prop( "disabled", false );
                     break;
@@ -490,6 +479,7 @@ include("head.inc");
                 case 'hybrid_rsa_server':
                 case 'xauth_rsa_server':
                 case 'rsasig':
+                case 'rsa_eap-mschapv2':
                     $(".auth_eap_tls_caref").show();
                     $(".auth_eap_tls_caref :input").prop( "disabled", false );
                     $(".auth_eap_tls").show();
@@ -602,7 +592,7 @@ include("head.inc");
 
                       <select name="iketype" id="iketype">
 <?php
-                      $keyexchange = array("ikev1" => "V1", "ikev2" => "V2");
+                      $keyexchange = array("ike" => "auto", "ikev1" => "V1", "ikev2" => "V2");
                       foreach ($keyexchange as $kidx => $name) :
                         ?>
                         <option value="<?=$kidx;?>" <?= $kidx == $pconfig['iketype'] ? "selected=\"selected\"" : "";?> >
@@ -942,23 +932,26 @@ endforeach; ?>
                       <select name="dhgroup">
 <?php
                       $p1_dhgroups = array(
-                        0  => gettext('off'),
-                        1  => '1 (768 bit)',
-                        2  => '2 (1024 bit)',
-                        5  => '5 (1536 bit)',
-                        14 => '14 (2048 bit)',
-                        15 => '15 (3072 bit)',
-                        16 => '16 (4096 bit)',
-                        17 => '17 (6144 bit)',
-                        18 => '18 (8192 bit)',
-                        19 => '19 (256 bit elliptic curve)',
-                        20 => '20 (384 bit elliptic curve)',
-                        21 => '21 (521 bit elliptic curve)',
-                        22 => '22 (1024(sub 160) bit)',
-                        23 => '23 (2048(sub 224) bit)',
-                        24 => '24 (2048(sub 256) bit)'
+                           0 => gettext('off'),
+                           1 => '1 (768 bits)',
+                           2 => '2 (1024 bits)',
+                           5 => '5 (1536 bits)',
+                           14 => '14 (2048 bits)',
+                           15 => '15 (3072 bits)',
+                           16 => '16 (4096 bits)',
+                           17 => '17 (6144 bits)',
+                           18 => '18 (8192 bits)',
+                           19 => '19 (NIST EC 256 bits)',
+                           20 => '20 (NIST EC 384 bits)',
+                           21 => '21 (NIST EC 521 bits)',
+                           22 => '22 (1024(sub 160) bits)',
+                           23 => '23 (2048(sub 224) bits)',
+                           24 => '24 (2048(sub 256) bits)',
+                           28 => '28 (Brainpool EC 256 bits)',
+                           29 => '29 (Brainpool EC 384 bits)',
+                           30 => '30 (Brainpool EC 512 bits)',
                       );
-                      foreach ($p1_dhgroups as $keygroup => $keygroupname) :
+                      foreach ($p1_dhgroups as $keygroup => $keygroupname):
 ?>
                         <option value="<?=$keygroup;?>" <?= $keygroup == $pconfig['dhgroup'] ? "selected=\"selected\"" : "";?>>
                           <?=$keygroupname;?>

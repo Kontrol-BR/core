@@ -59,7 +59,7 @@
                     if (request.responseJSON != undefined && request.responseJSON.errorMessage != undefined) {
                         BootstrapDialog.show({
                             type: BootstrapDialog.TYPE_DANGER,
-                            title: '{{ lang._('An API exception occured') }}',
+                            title: request.responseJSON.errorTitle,
                             message:request.responseJSON.errorMessage,
                             buttons: [{
                                 label: '{{ lang._('Close') }}',
@@ -164,10 +164,9 @@
             });
         </script>
 
-
-        <!-- JQuery Tokenize (http://zellerda.com/projects/tokenize) -->
-        <script src="/ui/js/jquery.tokenize.js"></script>
-        <link rel="stylesheet" type="text/css" href="{{theme_file_or_default('/css/jquery.tokenize.css', theme_name)}}" />
+        <!-- JQuery Tokenize2 (https://zellerda.github.io/Tokenize2/) -->
+        <script src="/ui/js/tokenize2.js"></script>
+        <link rel="stylesheet" type="text/css" href="{{theme_file_or_default('/css/tokenize2.css', theme_name)}}" rel="stylesheet" />
 
         <!-- Bootgrind (grid system from http://www.jquery-bootgrid.com/ )  -->
         <link rel="stylesheet" type="text/css" href="{{theme_file_or_default('/css/jquery.bootgrid.css', theme_name)}}" />
@@ -192,6 +191,7 @@
 
         <!-- OPNsense standard toolkit -->
         <script src="/ui/js/opnsense.js"></script>
+        <script src="/ui/js/opnsense_theme.js"></script>
         <script src="/ui/js/opnsense_ui.js"></script>
         <script src="/ui/js/opnsense_bootgrid_plugin.js"></script>
         <script src="{{theme_file_or_default('/js/theme.js', theme_name)}}"></script>
@@ -220,6 +220,7 @@
             <span class="icon-bar"></span>
           </button>
         </div>
+        <button class="toggle-sidebar" style="display:none;"><i class="fa fa-chevron-left"></i></button>
         <div class="collapse navbar-collapse">
           <ul class="nav navbar-nav navbar-right">
             <li id="menu_messages"><a href="#">{{session_username}}@{{system_hostname}}.{{system_domain}}</a></li>
@@ -261,15 +262,15 @@
             </div>
           </div>
         </section>
+        <!-- page footer -->
+        <footer class="page-foot">
+          <div class="container-fluid">
+            <a target="_blank" href="{{ product_website }}" class="redlnk">{{ product_name }}</a>
+            (c) {{ product_copyright_years }}
+            <a href="{{ product_copyright_url }}" class="tblnk">{{ product_copyright_owner }}</a>
+          </div>
+        </footer>
       </div>
-      <!-- page footer -->
-      <footer class="page-foot col-sm-push-3 col-lg-push-2">
-        <div class="container-fluid">
-          <a target="_blank" href="{{ product_website }}" class="redlnk">{{ product_name }}</a>
-          (c) {{ product_copyright_years }}
-          <a href="{{ product_copyright_url }}" class="tblnk">{{ product_copyright_owner }}</a>
-        </div>
-      </footer>
     </main>
 
     <!-- dialog "wait for (service) action" -->

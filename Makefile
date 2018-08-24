@@ -32,12 +32,14 @@ CORE_COMMIT!=	${.CURDIR}/Scripts/version.sh
 CORE_VERSION=	${CORE_COMMIT:C/-.*$//1}
 CORE_HASH=	${CORE_COMMIT:C/^.*-//1}
 
-CORE_ABI?=	18.1
+CORE_ABI?=	18.7
 CORE_ARCH?=	${ARCH}
 CORE_OPENVPN?=	# empty
 CORE_PHP?=	71
 CORE_PYTHON?=	27
-CORE_SURICATA?=	# empty
+CORE_RADVD?=	1
+CORE_SQUID?=	3
+CORE_SURICATA?=	-devel
 
 _FLAVOUR!=	if [ -f ${OPENSSL} ]; then ${OPENSSL} version; fi
 FLAVOUR?=	${_FLAVOUR:[1]}
@@ -55,7 +57,7 @@ CORE_TYPE?=		development
 CORE_MESSAGE?=		Insert Name Here
 
 CORE_MAINTAINER?=	franco@opnsense.org
-CORE_PACKAGESITE?=	http://pkg.opnsense.org
+CORE_PACKAGESITE?=	https://pkg.opnsense.org
 CORE_ORIGIN?=		opnsense/${CORE_NAME}
 CORE_COMMENT?=		OPNsense ${CORE_TYPE} package
 CORE_WWW?=		https://opnsense.org/
@@ -78,9 +80,8 @@ CORE_DEPENDS?=		${CORE_DEPENDS_${CORE_ARCH}} \
 			flock \
 			flowd \
 			hostapd \
-			isc-dhcp43-client \
-			isc-dhcp43-relay \
-			isc-dhcp43-server \
+			isc-dhcp44-relay \
+			isc-dhcp44-server \
 			lighttpd \
 			monit \
 			mpd5 \
@@ -117,11 +118,11 @@ CORE_DEPENDS?=		${CORE_DEPENDS_${CORE_ARCH}} \
 			py${CORE_PYTHON}-requests \
 			py${CORE_PYTHON}-sqlite3 \
 			py${CORE_PYTHON}-ujson \
-			radvd \
+			radvd${CORE_RADVD} \
 			rate \
-			rrdtool12 \
+			rrdtool \
 			samplicator \
-			squid \
+			squid${CORE_SQUID} \
 			sshlockout_pf \
 			strongswan \
 			sudo \
@@ -338,8 +339,34 @@ license: want-p5-File-Slurp
 dhparam:
 .for BITS in 1024 2048 4096
 	${OPENSSL} dhparam -out \
-	    ${.CURDIR}/src/etc/dh-parameters.${BITS} ${BITS}
+	    ${.CURDIR}/src/etc/dh-parameters.${BITS}.sample ${BITS}
 .endfor
+
+diff:
+	@git diff --stat -p stable/${CORE_ABI}
+
+ARGS=	mfc
+
+# handle argument expansion for required targets
+.for TARGET in ${.TARGETS}
+_TARGET=		${TARGET:C/\-.*//}
+.if ${_TARGET} != ${TARGET}
+.for ARGUMENT in ${ARGS}
+.if ${_TARGET} == ${ARGUMENT}
+${_TARGET}_ARGS+=	${TARGET:C/^[^\-]*(\-|\$)//:S/,/ /g}
+${TARGET}: ${_TARGET}
+.endif
+.endfor
+${_TARGET}_ARG=		${${_TARGET}_ARGS:[0]}
+.endif
+.endfor
+
+mfc:
+	@git checkout stable/${CORE_ABI}
+.for MFC in ${mfc_ARGS}
+	@git cherry-pick -x ${MFC}
+.endfor
+	@git checkout master
 
 test: want-phpunit6-php${CORE_PHP}
 	@if [ "$$(${PKG} query %n-%v ${CORE_NAME})" != "${CORE_NAME}-${CORE_VERSION}" ]; then \

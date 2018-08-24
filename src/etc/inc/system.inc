@@ -157,9 +157,10 @@ function system_resolvconf_generate($verbose = false)
         $resolvconf = "domain {$syscfg['domain']}\n";
     }
 
-    if (((isset($config['dnsmasq']['enable']) && (empty($config['dnsmasq']['interface']) || in_array("lo0", explode(",", $config['dnsmasq']['interface']))))
-      || (isset($config['unbound']['enable'])) && (empty($config['unbound']['active_interface']) || in_array("lo0", explode(",", $config['unbound']['active_interface']))))
-      && !isset($config['system']['dnslocalhost'])) {
+    /* XXX Unbound should always bind to loopback like Dnsmasq */
+    if (!isset($config['system']['dnslocalhost']) && (isset($config['dnsmasq']['enable']) ||
+      (isset($config['unbound']['enable']) && (empty($config['unbound']['active_interface']) ||
+      in_array('lo0', explode(',', $config['unbound']['active_interface'])))))) {
         $resolvconf .= "nameserver 127.0.0.1\n";
     }
 
@@ -569,11 +570,8 @@ function system_routing_configure($verbose = false, $interface = '')
     }
 }
 
-
 function system_staticroutes_configure($interface = '')
 {
-    global $config, $aliastable;
-
     $static_routes = get_staticroutes(false, true);
     if (count($static_routes)) {
         $gateways_arr = return_gateways_array(false, true);
@@ -672,7 +670,7 @@ function system_syslogd_extra_local($logsocket)
     return exec_safe('-l %s ', $logsocket);
 }
 
-function system_syslogd_start($verbose = false)
+function system_syslogd_start($verbose = false, $restart = false)
 {
     global $config;
 
@@ -798,9 +796,10 @@ EOD;
         }
     }
 
-    if (isvalidpid('/var/run/syslog.pid')) {
+    if (!$restart && isvalidpid('/var/run/syslog.pid')) {
         killbypid('/var/run/syslog.pid', 'HUP');
     } else {
+        killbypid('/var/run/syslog.pid', 'TERM', true);
         mwexecf_bg("/usr/local/sbin/syslogd -s -c -c -P %s {$syslogd_extra}", '/var/run/syslog.pid');
     }
 
@@ -873,8 +872,8 @@ function system_firmware_configure($verbose = false)
     }
 
     /* rewrite the config via the defaults */
-    $origin_conf = '/usr/local/etc/pkg/repos/origin.conf';
-    copy("${origin_conf}.sample", $origin_conf);
+    $origin_conf = '/usr/local/etc/pkg/repos/OPNsense.conf';
+    copy("{$origin_conf}.sample", $origin_conf);
 
     if (!empty($config['system']['firmware']['mirror'])) {
         mwexecf(
@@ -938,7 +937,7 @@ function system_halt($sync = false)
     if (!$sync) {
         mwexec_bg($cmd);
     } else {
-        mwexec($cmd);
+        passthru($cmd);
     }
 }
 
@@ -949,7 +948,7 @@ function system_reboot($sync = false)
     if (!$sync) {
         mwexec_bg($cmd);
     } else {
-        mwexec($cmd);
+        passthru($cmd);
     }
 }
 
@@ -1069,6 +1068,11 @@ function system_kernel_configure($verbose = false)
         $mods[] = $config['system']['thermal_hardware'];
     }
 
+    if ((new \OPNsense\TrafficShaper\TrafficShaper())->isEnabled() || (new \OPNsense\CaptivePortal\CaptivePortal())->isEnabled()) {
+        $mods[] = "ipfw";
+        $mods[] = "dummynet";
+    }
+
     foreach ($mods as $mod) {
         mwexecf('/sbin/kldload %s', $mod, true);
     }
@@ -1100,8 +1104,6 @@ function system_devd_configure($verbose = false)
 
 function system_cron_configure($verbose = false, $defer = false)
 {
-    global $config;
-
     function generate_cron_job($command, $minute = '0', $hour = '*', $monthday = '*', $month = '*', $weekday = '*')
     {
         $cron_item = array();
@@ -1126,7 +1128,7 @@ function system_cron_configure($verbose = false, $defer = false)
     foreach (plugins_cron() as $cron_plugin) {
         /*
          * We are stuffing jobs inside 'autocron' to be able to
-         * depreceate this at a later time.  Ideally all of the
+         * deprecate this at a later time.  Ideally all of the
          * services should use a single cron-model, which this is
          * not.  At least this plugin function helps us to divide
          * and conquer the code bits...  :)
@@ -1134,48 +1136,6 @@ function system_cron_configure($verbose = false, $defer = false)
         if (!empty($cron_plugin['autocron'])) {
             $autocron[] = call_user_func_array('generate_cron_job', $cron_plugin['autocron']);
         }
-    }
-
-    /* hourly */
-    $autocron[] = generate_cron_job('/usr/local/sbin/expiretable -v -t 3600 webConfiguratorlockout', '1');
-    $autocron[] = generate_cron_job('/usr/local/sbin/expiretable -v -t 3600 sshlockout', '2');
-    $autocron[] = generate_cron_job('/usr/local/sbin/expiretable -v -t 3600 virusprot', '3');
-    $autocron[] = generate_cron_job('/usr/local/etc/rc.expireaccounts', '5');
-    $autocron[] = generate_cron_job('/usr/local/bin/flock -n -E 0 -o /tmp/filter_update_tables.lock /usr/local/opnsense/scripts/filter/update_tables.py', '*');
-
-    /* every now and then */
-    $autocron[] = generate_cron_job('/usr/local/sbin/ping_hosts.sh', '*/4');
-
-    if (!empty($config['system']['rrdbackup'])) {
-       $autocron[] = generate_cron_job('/usr/local/etc/rc.backup_rrd', '0', '*/' . $config['system']['rrdbackup']);
-    }
-
-    if (!empty($config['system']['dhcpbackup'])) {
-        $autocron[] = generate_cron_job('/usr/local/etc/rc.backup_dhcpleases', '0', '*/' . $config['system']['dhcpbackup']);
-    }
-
-    if (!empty($config['system']['netflowbackup'])) {
-        $autocron[] = generate_cron_job('/usr/local/etc/rc.backup_netflow', '0', '*/' . $config['system']['netflowbackup']);
-    }
-
-    if (!empty($config['system']['captiveportalbackup'])) {
-        $autocron[] = generate_cron_job('/usr/local/etc/rc.backup_captiveportal', '0', '*/' . $config['system']['captiveportalbackup']);
-    }
-
-    $autocron[] = generate_cron_job('/usr/local/opnsense/scripts/remote_backup.php', 0, 1);
-
-    /* bogons fetch always set in default config.xml */
-    switch ($config['system']['bogons']['interval']) {
-        case 'daily':
-            $autocron[] = generate_cron_job('/usr/local/etc/rc.update_bogons cron', '1', '3', '*', '*', '*');
-            break;
-        case 'weekly':
-            $autocron[] = generate_cron_job('/usr/local/etc/rc.update_bogons cron', '1', '3', '*', '*', '0');
-            break;
-        case 'monthly':
-        default:
-            $autocron[] = generate_cron_job('/usr/local/etc/rc.update_bogons cron', '1', '3', '1', '*', '*');
-            break;
     }
 
     $crontab_contents = "# DO NOT EDIT THIS FILE -- OPNsense auto-generated file\n";
@@ -1344,13 +1304,14 @@ function system_login_configure($verbose = false)
         /* virtual terminals */
         foreach (array('ttyv0', 'ttyv1', 'ttyv2', 'ttyv3', 'ttyv4', 'ttyv5', 'ttyv6', 'ttyv7') as $virtualport) {
             if (strpos($tty, $virtualport) === 0) {
-                fwrite($fd, "${virtualport}\t\"/usr/libexec/getty {$console_type}\"\t\txterm\t${on_off_secure_v}\n");
+                fwrite($fd, "{$virtualport}\t\"/usr/libexec/getty {$console_type}\"\t\txterm\t${on_off_secure_v}\n");
                 continue 2;
             }
         }
         /* serial terminals */
-        foreach (array('ttyu0', 'ttyu1', 'ttyu2', 'ttyu3') as $serialport) {
-            if (strpos($tty, $serialport) === 0) {
+        foreach (array('tty%s0', 'tty%s1', 'tty%s2', 'tty%s3') as $serialport) {
+            $serialport = sprintf($serialport, isset($config['system']['serialusb']) ? 'U' : 'u');
+            if (stripos($tty, $serialport) === 0) {
                 fwrite($fd, "{$serialport}\t\"/usr/libexec/getty {$serial_type}\"\tvt100\t{$on_off_secure_u}\n");
                 continue 2;
             }

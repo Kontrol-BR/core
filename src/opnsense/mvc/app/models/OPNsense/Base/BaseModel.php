@@ -171,10 +171,10 @@ abstract class BaseModel
                     // application specific field type contains path separator
                     if (strpos($xmlNodeType, ".\\") === 0) {
                         // use current namespace (.\Class)
-                        $namespace = explode("\\" , get_class($this));
+                        $namespace = explode("\\", get_class($this));
                         array_pop($namespace);
                         $namespace = implode("\\", $namespace);
-                        $classname = str_replace(".\\",$namespace."\\FieldTypes\\", (string)$xmlNodeType);
+                        $classname = str_replace(".\\", $namespace."\\FieldTypes\\", (string)$xmlNodeType);
                     } else {
                         $classname = (string)$xmlNodeType;
                     }
@@ -583,6 +583,7 @@ abstract class BaseModel
     {
         if (version_compare($this->internal_current_model_version, $this->internal_model_version, '<')) {
             $upgradePerfomed = false;
+            $migObjects = array();
             $logger = new Syslog("config", array('option' => LOG_PID, 'facility' => LOG_LOCAL4));
             $class_info = new \ReflectionClass($this);
             // fetch version migrations
@@ -614,6 +615,7 @@ abstract class BaseModel
                         $migobj = $mig_class->newInstance();
                         try {
                             $migobj->run($this);
+                            $migObjects[] = $migobj;
                             $upgradePerfomed = true;
                         } catch (\Exception $e) {
                             $logger->error("failed migrating from version " .
@@ -631,6 +633,9 @@ abstract class BaseModel
             if ($upgradePerfomed) {
                 try {
                     $this->serializeToConfig();
+                    foreach ($migObjects as $migobj) {
+                        $migobj->post($this);
+                    }
                 } catch (\Exception $e) {
                     $logger->error("Model ".$class_info->getName() ." can't be saved, skip ( " .$e . " )");
                 }

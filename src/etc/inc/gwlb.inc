@@ -432,10 +432,8 @@ EOD;
         /* status socket */
         $params .= exec_safe('-u %s ', "/var/run/dpinger_{$name}.sock");
 
-        if (empty($gateway['action_disable'])) {
-            /* command to run on alarm */
-            $params .= '-C /usr/local/etc/rc.monitor ';
-        }
+        /* command to run on alarm */
+        $params .= '-C /usr/local/etc/rc.monitor ';
 
         $params .= exec_safe(
             '-d %s ',
@@ -479,8 +477,10 @@ EOD;
                 $gateway['losshigh'] : $dpinger_default['losshigh']
         );
 
+        $params .= exec_safe('%s ', $gateway['monitor']);
+
         /* daemonises forground mode because background mode does not work? */
-        mwexecf_bg("/usr/local/bin/dpinger -f {$params} %s", array($gateway['monitor']));
+        mwexec_bg("/usr/local/bin/dpinger -f {$params}");
     }
 
     if (!isset($config['system']['prefer_dpinger'])) {
@@ -537,7 +537,7 @@ function return_gateways_status($byname = false)
 
         $gateways_arr = return_gateways_array();
         foreach ($dpinger_gws as $gwname => $gwdata) {
-            $dpinger_status = get_dpinger_status($gwname, $gateways_arr[$gwname]['action_disable']);
+            $dpinger_status = get_dpinger_status($gwname);
             if ($dpinger_status === false) {
                 continue;
             }
@@ -631,7 +631,8 @@ function return_gateways_array($disabled = false, $localhost = false, $inactive 
         }
 
         $ctype = '';
-        switch($ifcfg['ipaddr']) {
+
+        switch ($ifcfg['ipaddr']) {
             case "dhcp":
             case "pppoe":
             case "pptp":
@@ -658,15 +659,13 @@ function return_gateways_array($disabled = false, $localhost = false, $inactive 
             continue;
         }
 
-        $ctype = "_". strtoupper($ctype);
-
         $gateway = array();
         $gateway['dynamic'] = false;
         $gateway['ipprotocol'] = "inet";
         $gateway['gateway'] = get_interface_gateway($ifname, $gateway['dynamic']);
         $gateway['interface'] = get_real_interface($ifname);
         $gateway['friendlyiface'] = $ifname;
-        $gateway['name'] = "{$friendly}{$ctype}";
+        $gateway['name'] = strtoupper("{$friendly}_{$ctype}");
         $gateway['attribute'] = "system";
 
         if ($gateway['dynamic'] === "default" && $found_defaultv4 == 0) {
@@ -674,6 +673,7 @@ function return_gateways_array($disabled = false, $localhost = false, $inactive 
             $gateway['dynamic'] = true;
             $found_defaultv4 = 1;
         }
+
         /* loopback dummy for dynamic interfaces without an IP */
         if (!is_ipaddrv4($gateway['gateway']) && $gateway['dynamic'] == true) {
             $gateway['gateway'] = "dynamic";
@@ -683,7 +683,7 @@ function return_gateways_array($disabled = false, $localhost = false, $inactive 
             $gateway['monitor'] = $gateway['gateway'];
         }
 
-        $gateway['descr'] = "Interface {$friendly}{$ctype} Gateway";
+        $gateway['descr'] = "Interface {$friendly} {$ctype} Gateway";
         $gateway['monitor_disable'] = true;
         $gateways_arr[$gateway['name']] = $gateway;
     }
@@ -710,25 +710,42 @@ function return_gateways_array($disabled = false, $localhost = false, $inactive 
         }
 
         $ctype = '';
-        switch($ifcfg['ipaddrv6']) {
-            case "slaac":
-            case "dhcp6":
-            case "6to4":
-            case "6rd":
+
+        switch ($ifcfg['ipaddrv6']) {
+            case 'slaac':
+            case 'dhcp6':
+            case '6to4':
+            case '6rd':
                 $ctype = $ifcfg['ipaddrv6'];
                 break;
             default:
-                if (substr($ifcfg['if'], 0, 4) ==  "ovpn") {
+                if (substr($ifcfg['if'], 0, 4) ==  'ovpn') {
                     // if current iface is an ovpn server endpoint then skip it
                     if (substr($ifcfg['if'], 4, 1) == 's') {
                         continue 2;
                     }
 
-                    $ctype = "VPNv6";
+                    $vpnid = substr($ifcfg['if'], 5);
+                    $vpnv6 = false;
+
+                    if (isset($config['openvpn']['openvpn-client'])) {
+                        foreach ($config['openvpn']['openvpn-client'] as $settings) {
+                            if ($settings['vpnid'] == $vpnid) {
+                                $vpnv6 = !isset($settings['no_tun_ipv6']);
+                                break;
+                            }
+                        }
+                    }
+
+                    if (!$vpnv6) {
+                        continue 2;
+                    }
+
+                    $ctype = 'VPNv6';
                 } elseif (in_array(substr($ifcfg['if'], 0, 3), array('gif', 'gre'))) {
                     if (!empty($ifcfg['if']) && !empty($ifdetails[$ifcfg['if']]['ipv6'])
                             && $ifdetails[$ifcfg['if']]['ipv6'][0]['link-local'] != 1) {
-                        $ctype = "TUNNELv6";
+                        $ctype = 'TUNNELv6';
                     }
                 }
                 break;
@@ -738,21 +755,19 @@ function return_gateways_array($disabled = false, $localhost = false, $inactive 
             continue;
         }
 
-        $ctype = "_". strtoupper($ctype);
-
         $gateway = array();
         $gateway['dynamic'] = false;
         $gateway['ipprotocol'] = "inet6";
         $gateway['gateway'] = get_interface_gateway_v6($ifname, $gateway['dynamic']);
         $gateway['interface'] = get_real_interface($ifname, "inet6");
-        switch($ifcfg['ipaddrv6']) {
+        switch ($ifcfg['ipaddrv6']) {
             case "6rd":
             case "6to4":
                 $gateway['dynamic'] = "default";
                 break;
         }
         $gateway['friendlyiface'] = $ifname;
-        $gateway['name'] = "{$friendly}{$ctype}";
+        $gateway['name'] = strtoupper("{$friendly}_{$ctype}");
         $gateway['attribute'] = "system";
 
         if (($gateway['dynamic'] === "default")  && ($found_defaultv6 == 0)) {
@@ -770,7 +785,7 @@ function return_gateways_array($disabled = false, $localhost = false, $inactive 
             $gateway['monitor'] = $gateway['gateway'];
         }
 
-        $gateway['descr'] = "Interface {$friendly}{$ctype} Gateway";
+        $gateway['descr'] = "Interface {$friendly} {$ctype} Gateway";
         $gateway['monitor_disable'] = true;
         $gateways_arr[$gateway['name']] = $gateway;
     }
@@ -863,8 +878,11 @@ function return_gateways_array($disabled = false, $localhost = false, $inactive 
     return $gateways_arr;
 }
 
-function fixup_default_gateway($gateways_status, $gateways_arr)
+function fixup_default_gateway()
 {
+    $gateways_status = return_gateways_status(true);
+    $gateways_arr = return_gateways_array();
+
     foreach (array("inet", "inet6") as $ipprotocol) {
         $dfltgwname = null;
         $dfltgwip = null;
@@ -879,7 +897,7 @@ function fixup_default_gateway($gateways_status, $gateways_arr)
                 /* wrong address family */
                 continue;
             }
-            if (!isset($gwsttng['monitoring_disabled']) && $gateways_status[$gwname]['status'] === 'down') {
+            if (strpos($gateways_status[$gwname]['status'], 'down') !== false) {
                 /* cannot use down gateway */
                 continue;
             }
@@ -1164,7 +1182,7 @@ function validate_address_family($ipaddr, $gwname)
 
     $gw_array = return_gateways_array();
     if (is_array($gw_array[$gwname])) {
-        switch($gw_array[$gwname]['ipprotocol']) {
+        switch ($gw_array[$gwname]['ipprotocol']) {
             case "inet":
                 $v4gw = true;
                 break;
@@ -1207,7 +1225,7 @@ function running_dpinger_processes()
     return $result;
 }
 
-function get_dpinger_status($gwname, $detailed = false)
+function get_dpinger_status($gwname)
 {
     $running_processes = running_dpinger_processes();
 
@@ -1271,9 +1289,9 @@ function get_dpinger_status($gwname, $detailed = false)
     }
 
     if ($r['latency_avg'] > $settings['latencyhigh']) {
-        $r['status'] = $detailed ? 'delay' : 'down';
+        $r['status'] = 'down';
     } elseif ($r['loss'] > $settings['losshigh']) {
-        $r['status'] = $detailed ? 'loss' : 'down';
+        $r['status'] = 'down';
     } elseif ($r['latency_avg'] > $settings['latencylow']) {
         $r['status'] = 'delay';
     } elseif ($r['loss'] > $settings['losslow']) {

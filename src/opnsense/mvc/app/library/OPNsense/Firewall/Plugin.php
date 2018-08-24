@@ -78,6 +78,21 @@ class Plugin
         $this->interfaceMapping = array();
         $this->interfaceMapping['loopback'] = array('if' => 'lo0', 'descr' => 'loopback');
         $this->interfaceMapping = array_merge($this->interfaceMapping, $mapping);
+        // generate virtual IPv6 interfaces
+        foreach ($this->interfaceMapping as $key => &$intf) {
+            if (!empty($intf['ipaddrv6']) && ($intf['ipaddrv6'] == '6rd' || $intf['ipaddrv6'] == '6to4')) {
+                $realif = "{$intf['if']}_stf";
+                // create new interface
+                $this->interfaceMapping[$realif] = array();
+                $this->interfaceMapping[$realif]['ifconfig']['ipv6'] = $intf['ifconfig']['ipv6'];
+                $this->interfaceMapping[$realif]['gatewayv6'] = $intf['gatewayv6'];
+                $this->interfaceMapping[$realif]['is_IPv6_override'] = true;
+                $this->interfaceMapping[$realif]['descr'] = $intf['descr'];
+                $this->interfaceMapping[$realif]['if'] = $realif;
+                // link original interface
+                $intf['IPv6_override'] = $realif;
+            }
+        }
     }
 
     /**
@@ -167,7 +182,12 @@ class Plugin
      */
     public function getInterfaceMapping()
     {
-        return $this->interfaceMapping;
+        foreach ($this->interfaceMapping as $intfkey => $intf) {
+            // suppress virtual ipv6 interfaces
+            if (empty($intf['is_IPv6_override'])) {
+                yield $intfkey => $intf;
+            }
+        }
     }
 
     /**

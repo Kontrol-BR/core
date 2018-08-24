@@ -1,32 +1,32 @@
 <?php
 
 /*
-    Copyright (C) 2015-2017 Franco Fichtner <franco@opnsense.org>
-    Copyright (C) 2004-2007 Scott Ullrich <sullrich@gmail.com>
-    Copyright (C) 2003-2004 Manuel Kasper <mk@neon1.net>.
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are met:
-
-    1. Redistributions of source code must retain the above copyright notice,
-       this list of conditions and the following disclaimer.
-
-    2. Redistributions in binary form must reproduce the above copyright
-       notice, this list of conditions and the following disclaimer in the
-       documentation and/or other materials provided with the distribution.
-
-    THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES,
-    INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
-    AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
-    AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
-    OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-    SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-    INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-    CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-    ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
-*/
+ * Copyright (C) 2015-2018 Franco Fichtner <franco@opnsense.org>
+ * Copyright (C) 2004-2007 Scott Ullrich <sullrich@gmail.com>
+ * Copyright (C) 2003-2004 Manuel Kasper <mk@neon1.net>.
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice,
+ *    this list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES,
+ * INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
+ * AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ * AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+ * OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
 
 require_once("IPv6.inc");
 
@@ -74,6 +74,52 @@ function is_process_running($process)
     exec('/bin/pgrep -anx ' . escapeshellarg($process), $output, $retval);
 
     return (intval($retval) == 0);
+}
+
+function list_dh_parameters()
+{
+    global $config;
+
+    $available = array(1024, 2048, 4096);
+
+    if (!empty($config['system']['dhparamusage'])) {
+        switch ($config['system']['dhparamusage']) {
+            case 'rfc7919':
+                $available = array(2048, 3072, 4096);
+                break;
+            default:
+                /* XXX whatever we have on the disk */
+                break;
+        }
+    }
+
+    return $available;
+}
+
+function get_dh_parameters($bits)
+{
+    global $config;
+
+    $file = "/usr/local/etc/dh-parameters.{$bits}";
+
+    if (!empty($config['system']['dhparamusage'])) {
+        switch ($config['system']['dhparamusage']) {
+            case 'rfc7919':
+                return "{$file}.rfc7919";
+            default:
+                break;
+        }
+    }
+
+    if (empty($config['system']['dhparamusage']) || !file_exists($file)) {
+        /*
+         * Use the sample file if the normal file is MIA
+         * or when the renew interval is not set:
+         */
+        $file .= '.sample';
+    }
+
+    return $file;
 }
 
 function is_subsystem_dirty($subsystem = '')
@@ -138,9 +184,9 @@ function gen_subnet($ipaddr, $bits)
 }
 
 /* return the subnet address given a host address and a subnet bit count */
-function gen_subnetv6($ipaddr, $bits)
+function gen_subnetv6($ipaddr, $bits, $validate = true)
 {
-    if (!is_ipaddrv6($ipaddr) || !is_numeric($bits)) {
+    if ($validate && (!is_ipaddrv6($ipaddr) || !is_numeric($bits))) {
         return "";
     }
 
@@ -473,11 +519,9 @@ function is_ipaddroralias($ipaddr)
     global $config;
 
     if (is_alias($ipaddr)) {
-        if (isset($config['aliases']['alias'])) {
-            foreach ($config['aliases']['alias'] as $alias) {
-                if ($alias['name'] == $ipaddr && !preg_match("/port/i", $alias['type'])) {
-                    return true;
-                }
+        foreach ((new \OPNsense\Firewall\Alias())->aliasIterator() as $alias) {
+            if ($alias['name'] == $ipaddr && !preg_match("/port/i", $alias['type'])) {
+                return true;
             }
         }
         return false;
@@ -597,11 +641,9 @@ function is_portoralias($port)
     global $config;
 
     if (is_alias($port)) {
-        if (isset($config['aliases']['alias'])) {
-            foreach ($config['aliases']['alias'] as $alias) {
-                if ($alias['name'] == $port && preg_match("/port/i", $alias['type'])) {
-                    return true;
-                }
+        foreach ((new \OPNsense\Firewall\Alias())->aliasIterator() as $alias) {
+            if ($alias['name'] == $port && preg_match("/port/i", $alias['type'])) {
+                return true;
             }
         }
         return false;
@@ -1001,20 +1043,6 @@ function is_alias($name)
 {
     global $aliastable;
     return array_key_exists($name, $aliastable);
-}
-
-/* expand a host or network alias, if necessary */
-function alias_expand($name)
-{
-    global $aliastable;
-
-    if (array_key_exists($name, $aliastable)) {
-        return "\${$name}";
-    } elseif (is_ipaddr($name) || is_subnet($name) || is_port($name) || is_portrange($name)) {
-        return "{$name}";
-    } else {
-        return null;
-    }
 }
 
 function subnet_size($subnet)
