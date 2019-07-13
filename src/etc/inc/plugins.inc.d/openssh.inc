@@ -2,7 +2,7 @@
 
 /*
  * Copyright (C) 2004 Scott Ullrich <sullrich@gmail.com>
- * Copyright (C) 2004 Fred Mol <fredmol@xs4all.nl>.
+ * Copyright (C) 2004 Fred Mol <fredmol@xs4all.nl>
  * Copyright (C) 2015-2018 Franco Fichtner <franco@opnsense.org>
  * All rights reserved.
  *
@@ -105,9 +105,6 @@ function openssh_configure_do($verbose = false, $interface = '')
     /* make ssh home directory */
     @mkdir('/var/empty', 0555, true);
 
-    /* Login related files. */
-    touch('/var/log/lastlog');
-
     $keys = array(
         /* .pub files are implied */
         'rsa' => 'ssh_host_rsa_key',
@@ -186,15 +183,13 @@ function openssh_configure_do($verbose = false, $interface = '')
 
     $listeners = array();
 
-    foreach ($interfaces as $interface) {
-        foreach (legacy_getall_interface_addresses(get_real_interface($interface)) as $tmpaddr) {
-            $tmpaddr = explode('/', $tmpaddr)[0];
-            /* no support for link-local address with scope specified */
-            $tmpaddr = explode('%', $tmpaddr)[0];
-            if (!empty($tmpaddr)) {
-                $listeners[] = $tmpaddr;
-            }
+    foreach (interfaces_addresses($interfaces) as $tmpaddr => $info) {
+        if ($info['scope']) {
+            /* link-local does not seem to be supported */
+            continue;
         }
+
+        $listeners[] = $tmpaddr;
     }
 
     foreach ($listeners as $listener) {

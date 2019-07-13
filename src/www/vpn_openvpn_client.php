@@ -1,36 +1,36 @@
 <?php
 
 /*
-    Copyright (C) 2014-2016 Deciso B.V.
-    Copyright (C) 2008 Shrew Soft Inc. <mgrooms@shrew.net>
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are met:
-
-    1. Redistributions of source code must retain the above copyright notice,
-       this list of conditions and the following disclaimer.
-
-    2. Redistributions in binary form must reproduce the above copyright
-       notice, this list of conditions and the following disclaimer in the
-       documentation and/or other materials provided with the distribution.
-
-    THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES,
-    INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
-    AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
-    AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
-    OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-    SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-    INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-    CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-    ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
-*/
+ * Copyright (C) 2014-2016 Deciso B.V.
+ * Copyright (C) 2008 Shrew Soft Inc. <mgrooms@shrew.net>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice,
+ *    this list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES,
+ * INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
+ * AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ * AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+ * OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
 
 require_once("guiconfig.inc");
-require_once("plugins.inc.d/openvpn.inc");
 require_once("services.inc");
 require_once("interfaces.inc");
+require_once("plugins.inc.d/openvpn.inc");
 
 $a_client = &config_read_array('openvpn', 'openvpn-client');
 
@@ -213,7 +213,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $server_addr_a = array();
         $server_port_a = array();
 
-        foreach ($pconfig['server_addr'] as $i => $unused) {
+        foreach (array_keys($pconfig['server_addr']) as $i) {
             if (empty($pconfig['server_addr'][$i]) && empty($pconfig['server_port'][$i])) {
                 continue;
             }
@@ -293,6 +293,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
         if (($pconfig['mode'] != "p2p_shared_key") && empty($pconfig['certref']) && empty($pconfig['auth_user']) && empty($pconfig['auth_pass'])) {
             $input_errors[] = gettext("If no Client Certificate is selected, a username and password must be entered.");
+        }
+        $prev_opt = (isset($id) && !empty($a_client[$id])) ? $a_client[$id]['custom_options'] : "";
+        if ($prev_opt != str_replace("\r\n", "\n", $pconfig['custom_options']) && !userIsAdmin($_SESSION['Username'])) {
+            $input_errors[] = gettext('Advanced options may only be edited by system administrators due to the increased possibility of privilege escalation.');
         }
 
         if (count($input_errors) == 0) {
@@ -636,18 +640,6 @@ $( document ).ready(function() {
               $aliaslist = get_configured_ip_aliases_list();
               foreach ($aliaslist as $aliasip => $aliasif) {
                   $interfaces[$aliasif.'|'.$aliasip] = $aliasip." (".get_vip_descr($aliasip).")";
-              }
-              $grouplist = return_gateway_groups_array();
-              foreach ($grouplist as $name => $group) {
-                  if ($group['ipprotocol'] != "inet") {
-                      continue;
-                  }
-                  if ($group[0]['vip'] <> "") {
-                      $vipif = $group[0]['vip'];
-                  } else {
-                      $vipif = $group[0]['int'];
-                  }
-                  $interfaces[$name] = "GW Group {$name}";
               }
               $interfaces['lo0'] = "Localhost";
               $interfaces['any'] = "any";
@@ -1113,6 +1105,7 @@ $( document ).ready(function() {
             <td style="width:22%"><a id="help_for_custom_options" href="#" class="showhelp"><i class="fa fa-info-circle"></i></a> <?=gettext("Advanced"); ?></td>
             <td style="width:78%">
               <textarea rows="6" cols="78" name="custom_options" id="custom_options"><?=$pconfig['custom_options'];?></textarea>
+              <?=gettext("This option will be removed in the future due to being insecure by nature. In the mean time only full administrators are allowed to change this setting.");?>
               <div class="hidden" data-for="help_for_custom_options">
                 <?=gettext("Enter any additional options you would like to add to the configuration file here."); ?>
               </div>
@@ -1152,7 +1145,7 @@ $( document ).ready(function() {
           <tr>
             <td>&nbsp;</td>
             <td style="width:78%">
-              <input name="save" type="submit" class="btn btn-primary" value="<?=gettext("Save"); ?>" />
+              <input name="save" type="submit" class="btn btn-primary" value="<?=html_safe(gettext('Save')); ?>" />
               <input name="act" type="hidden" value="<?=$act;?>" />
 <?php
               if (isset($id) && $a_client[$id]) :?>
@@ -1190,7 +1183,7 @@ $( document ).ready(function() {
               $server_addr_a = explode(',', $client['server_addr']);
               $server_port_a = explode(',', $client['server_port']);
               $server = array();
-              foreach ($server_addr_a as $j => $unused) {
+              foreach (array_keys($server_addr_a) as $j) {
                   $server[] = "{$server_addr_a[$j]}:{$server_port_a[$j]}";
               } ?>
               <tr>
@@ -1205,7 +1198,7 @@ $( document ).ready(function() {
                 <td><?= htmlspecialchars(implode(', ', $server)) ?></td>
                 <td><?= htmlspecialchars($client['description']) ?></td>
                 <td class="text-nowrap">
-                    <a data-id="<?=$i;?>" data-toggle="tooltip" title="<?=gettext("move selected before this item");?>" class="act_move btn btn-default btn-xs">
+                    <a data-id="<?=$i;?>" data-toggle="tooltip" title="<?=gettext("Move selected before this item");?>" class="act_move btn btn-default btn-xs">
                       <span class="fa fa-arrow-left fa-fw"></span>
                     </a>
                     <a href="vpn_openvpn_client.php?act=edit&amp;id=<?=$i;?>" class="btn btn-default btn-xs">
@@ -1225,7 +1218,7 @@ $( document ).ready(function() {
               <tr>
                 <td colspan="4"></td>
                 <td class="text-nowrap">
-                  <a data-id="<?=$i;?>" data-toggle="tooltip" title="<?=gettext("move selected items to end");?>" class="act_move btn btn-default btn-xs">
+                  <a data-id="<?=$i;?>" data-toggle="tooltip" title="<?=gettext("Move selected items to end");?>" class="act_move btn btn-default btn-xs">
                     <span class="fa fa-arrow-down fa-fw"></span>
                   </a>
                   <a data-id="x" title="<?=gettext("delete selected rules"); ?>" data-toggle="tooltip"  class="act_delete btn btn-default btn-xs">

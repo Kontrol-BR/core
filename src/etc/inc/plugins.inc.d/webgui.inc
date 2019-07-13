@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright (C) 2016-2018 Franco Fichtner <franco@opnsense.org>
+ * Copyright (C) 2016-2019 Franco Fichtner <franco@opnsense.org>
  * Copyright (C) 2004-2007 Scott Ullrich <sullrich@gmail.com>
  * Copyright (C) 2003-2004 Manuel Kasper <mk@neon1.net>
  * All rights reserved.
@@ -34,6 +34,7 @@ function webgui_configure()
         'earlybootup' => array('webgui_configure_do'),
         'local' => array('webgui_configure_do'),
         'newwanip' => array('webgui_configure_do:2'),
+        'webgui' => array('webgui_configure_do'),
     );
 }
 
@@ -47,6 +48,12 @@ function webgui_configure_do($verbose = false, $interface = '')
         $interfaces[] = 'lo0';
     }
 
+    @mkdir('/var/lib/php/sessions', 0750, true);
+    /* do not trust PHP with mkdir permission on existing directory */
+    @chmod('/var/lib/php/sessions', 0750);
+    @chown('/var/lib/php/sessions', 'root');
+    @chgrp('/var/lib/php/sessions', 'wheel');
+
     if (!empty($interface) && !in_array($interface, $interfaces)) {
         return;
     }
@@ -58,16 +65,13 @@ function webgui_configure_do($verbose = false, $interface = '')
 
     $listeners = count($interfaces) ? array() : array('0.0.0.0', '::');
 
-    foreach ($interfaces as $interface) {
-        foreach (legacy_getall_interface_addresses(get_real_interface($interface)) as $tmpaddr) {
-            $tmpaddr = explode('/', $tmpaddr)[0];
-            /* no support for link-local address with scope specified */
-            $tmpaddr = explode('%', $tmpaddr)[0];
+    foreach (interfaces_addresses($interfaces) as $tmpaddr => $info) {
+        if ($info['scope']) {
             /* link-local does not seem to be supported */
-            if (!empty($tmpaddr) && !is_linklocal($tmpaddr)) {
-                $listeners[] = $tmpaddr;
-            }
+            continue;
         }
+
+        $listeners[] = $tmpaddr;
     }
 
     chdir('/usr/local/www');
@@ -79,7 +83,7 @@ function webgui_configure_do($verbose = false, $interface = '')
     $ca = '';
 
     /* non-standard port? */
-    if (isset($config['system']['webgui']['port']) && $config['system']['webgui']['port'] <> "") {
+    if (isset($config['system']['webgui']['port']) && $config['system']['webgui']['port'] != '') {
         $portarg = "{$config['system']['webgui']['port']}";
     }
 
@@ -179,6 +183,7 @@ EOD;
 
     $lighty_port = $port;
 
+    $lighty_use_syslog = '';
     if (!isset($config['syslog']['nologlighttpd'])) {
         $lighty_use_syslog = <<<EOD
 ## where to send error/access-messages to

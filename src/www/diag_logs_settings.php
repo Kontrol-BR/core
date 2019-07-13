@@ -1,39 +1,38 @@
 <?php
 
 /*
-    Copyright (C) 2014-2015 Deciso B.V.
-    Copyright (C) 2007 Seth Mos <seth.mos@dds.nl>
-    Copyright (C) 2004-2009 Scott Ullrich <sullrich@gmail.com>
-    Copyright (C) 2003-2004 Manuel Kasper <mk@neon1.net>
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are met:
-
-    1. Redistributions of source code must retain the above copyright notice,
-       this list of conditions and the following disclaimer.
-
-    2. Redistributions in binary form must reproduce the above copyright
-       notice, this list of conditions and the following disclaimer in the
-       documentation and/or other materials provided with the distribution.
-
-    THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES,
-    INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
-    AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
-    AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
-    OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-    SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-    INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-    CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-    ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
-*/
+ * Copyright (C) 2014-2015 Deciso B.V.
+ * Copyright (C) 2007 Seth Mos <seth.mos@dds.nl>
+ * Copyright (C) 2004-2009 Scott Ullrich <sullrich@gmail.com>
+ * Copyright (C) 2003-2004 Manuel Kasper <mk@neon1.net>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice,
+ *    this list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES,
+ * INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
+ * AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ * AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+ * OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
 
 require_once("guiconfig.inc");
 require_once("interfaces.inc");
 require_once("filter.inc");
 require_once("system.inc");
-require_once("services.inc");
 
 function clear_all_log_files()
 {
@@ -50,6 +49,7 @@ function clear_all_log_files()
         'mail',
         'ntpd',
         'openvpn',
+        'pkg',
         'poes',
         'portalauth',
         'ppps',
@@ -79,7 +79,7 @@ function clear_all_log_files()
 
     system_syslogd_start();
     killbyname('dhcpd');
-    services_dhcpd_configure();
+    plugins_configure('dhcp');
 }
 
 function is_valid_syslog_server($target) {
@@ -342,7 +342,7 @@ $(document).ready(function() {
                     <td style="width:22%"><strong><?=gettext("Local Logging Options");?></strong></td>
                     <td style="width:78%; text-align:right">
                       <small><?=gettext("full help"); ?> </small>
-                      <i class="fa fa-toggle-off text-danger"  style="cursor: pointer;" id="show_all_help_page"></i>
+                      <i class="fa fa-toggle-off text-danger" style="cursor: pointer;" id="show_all_help_page"></i>
                     </td>
                   </tr>
                   <tr>
@@ -417,18 +417,19 @@ $(document).ready(function() {
                       <input name="loglighttpd" type="checkbox" id="loglighttpd" value="yes" <?=!empty($pconfig['loglighttpd']) ? "checked=\"checked\"" :""; ?> />
                       <?=gettext("Log errors from the web server process.");?>
                       <div class="hidden" data-for="help_for_loglighttpd">
-                        <?=gettext("Hint: If this is checked, errors from the lighttpd web server process for the GUI or Captive Portal will appear in the main system log.");?></td>
+                        <?=gettext('Hint: If this is checked, errors from the lighttpd web server process for the GUI or Captive Portal will appear in the main system log.');?>
                       </div>
+                    </td>
                   </tr>
                   <tr>
-                    <td><i class="fa fa-info-circle text-muted"></i>  <?=gettext('Local Logging') ?></td>
+                    <td><i class="fa fa-info-circle text-muted"></i> <?=gettext('Local Logging') ?></td>
                     <td> <input name="disablelocallogging" type="checkbox" id="disablelocallogging" value="yes" <?=!empty($pconfig['disablelocallogging']) ? "checked=\"checked\"" :""; ?> onclick="enable_change(false)" />
                       <?=gettext("Disable writing log files to the local disk");?></td>
                   </tr>
                   <tr>
                     <td><a id="help_for_resetlogs" href="#" class="showhelp"><i class="fa fa-info-circle"></i></a> <?=gettext('Reset Logs') ?></td>
                     <td>
-                      <input name="resetlogs" id="resetlogs" type="submit" class="btn btn-default" value="<?=gettext("Reset Log Files"); ?>"/>
+                      <input name="resetlogs" id="resetlogs" type="submit" class="btn btn-default" value="<?= html_safe(gettext('Reset Log Files')) ?>"/>
                       <div class="hidden" data-for="help_for_resetlogs">
                         <?= gettext("Note: Clears all local log files and reinitializes them as empty logs. This also restarts the DHCP daemon. Use the Save button first if you have made any setting changes."); ?>
                       </div>
@@ -445,17 +446,22 @@ $(document).ready(function() {
                     <td style="width:78%"></td>
                   </tr>
                   <tr>
+                    <td><i class="fa fa-info-circle text-muted"></i> <?=gettext('Enable Remote Logging');?></td>
+                    <td>
+                      <input name="enable" type="checkbox" id="enable" value="yes" <?=!empty($pconfig['enable']) ? 'checked="checked"' : ''; ?> onclick="enable_change(false)" />
+                      <?=gettext('Send log messages to remote syslog server');?>
+                    </td>
+                  </tr>
+                  <tr>
                     <td><a id="help_for_sourceip" href="#" class="showhelp"><i class="fa fa-info-circle"></i></a> <?=gettext("Source Address"); ?></td>
                     <td>
-                      <select name="sourceip"  class="form-control">
-                        <option value=""><?=gettext('Default (any)') ?></option>
-<?php
-                        foreach (get_possible_listen_ips(false) as $sip):?>
-                        <option value="<?=$sip['value'];?>" <?=!link_interface_to_bridge($sip['value']) && ($sip['value'] == $pconfig['sourceip']) ? "selected=\"selected\"" : "";?>>
-                          <?=htmlspecialchars($sip['name']);?>
+                      <select name="sourceip" class="form-control">
+                        <option value=""><?= gettext('Any') ?></option>
+<?php foreach (get_configured_interface_with_descr() as $ifname => $ifdescr): ?>
+                        <option value="<?= html_safe($ifname) ?>" <?= $ifname == $pconfig['sourceip'] ? 'selected="selected"' : '' ?>>
+                          <?= html_safe($ifdescr) ?>
                         </option>
-<?php
-                        endforeach; ?>
+<?php endforeach ?>
                       </select>
                       <div class="hidden" data-for="help_for_sourceip">
                         <?= gettext("This option will allow the logging daemon to bind to a single IP address, rather than all IP addresses."); ?>
@@ -475,13 +481,6 @@ $(document).ready(function() {
                       <div class="hidden" data-for="help_for_ipproto">
                         <?= gettext("This option is only used when a non-default address is chosen as the source above. This option only expresses a preference; If an IP address of the selected type is not found on the chosen interface, the other type will be tried."); ?>
                       </div>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td><i class="fa fa-info-circle text-muted"></i> <?=gettext("Enable Remote Logging");?></td>
-                    <td>
-                      <input name="enable" type="checkbox" id="enable" value="yes" <?= !empty($pconfig['enable']) ? "checked=\"checked\"" :""; ?> onclick="enable_change(false)" />
-                      <?=gettext("Send log messages to remote syslog server");?>
                     </td>
                   </tr>
                   <tr>
@@ -550,7 +549,7 @@ $(document).ready(function() {
                 <table class="table table-striped opnsense_standard_table_form">
                   <tr>
                     <td style="width:22%"></td>
-                    <td style="width:78%"><input name="Submit" type="submit" class="btn btn-primary" value="<?=gettext("Save"); ?>" onclick="enable_change(true)" />
+                    <td style="width:78%"><input name="Submit" type="submit" class="btn btn-primary" value="<?=html_safe(gettext('Save')); ?>" onclick="enable_change(true)" />
                     </td>
                   </tr>
                 </table>
@@ -561,4 +560,6 @@ $(document).ready(function() {
       </div>
     </div>
   </section>
-<?php include("foot.inc"); ?>
+<?php
+
+include("foot.inc");

@@ -30,7 +30,9 @@
 namespace OPNsense\Firewall\Api;
 
 use \OPNsense\Base\ApiMutableModelControllerBase;
+use \OPNsense\Base\UserException;
 use \OPNsense\Core\Backend;
+use \OPNsense\Core\Config;
 
 /**
  * @package OPNsense\Firewall
@@ -38,8 +40,8 @@ use \OPNsense\Core\Backend;
 class AliasController extends ApiMutableModelControllerBase
 {
 
-    static protected $internalModelName = 'alias';
-    static protected $internalModelClass = 'OPNsense\Firewall\Alias';
+    protected static $internalModelName = 'alias';
+    protected static $internalModelClass = 'OPNsense\Firewall\Alias';
 
     /**
      * search aliases
@@ -50,8 +52,8 @@ class AliasController extends ApiMutableModelControllerBase
     {
         return $this->searchBase(
             "aliases.alias",
-            array('enabled', 'name', 'description', 'type'),
-            "description"
+            array('enabled', 'name', 'description', 'type', 'content'),
+            "name"
         );
     }
 
@@ -96,13 +98,23 @@ class AliasController extends ApiMutableModelControllerBase
      */
     public function getItemAction($uuid = null)
     {
-        return $this->getBase("alias", "aliases.alias", $uuid);
+        $response = $this->getBase("alias", "aliases.alias", $uuid);
+        $selected_aliases = array_keys($response['alias']['content']);
+        foreach ($this->getModel()->aliasIterator() as $alias) {
+            if (!in_array($alias['name'], $selected_aliases)) {
+                $response['alias']['content'][$alias['name']] = array(
+                  "selected" => 0, "value" =>$alias['name']
+                );
+            }
+        }
+        return $response;
     }
 
     /**
      * find the alias uuid by name
      * @param $name alias name
-     * @return string uuid
+     * @return array uuid
+     * @throws \ReflectionException
      */
     public function getAliasUUIDAction($name)
     {
@@ -125,6 +137,7 @@ class AliasController extends ApiMutableModelControllerBase
      */
     public function delItemAction($uuid)
     {
+        Config::getInstance()->lock();
         $node = $this->getModel()->getNodeByReference('aliases.alias.'. $uuid);
         if ($node != null) {
             $uses = $this->getModel()->whereUsed((string)$node->name);
@@ -143,14 +156,14 @@ class AliasController extends ApiMutableModelControllerBase
     /**
      * toggle status
      * @param string $uuid id to toggled
-     * @param string|null $disabled set disabled by default
+     * @param string|null $enabled set enabled by default
      * @return array status
      * @throws \Phalcon\Validation\Exception when field validations fail
      * @throws \ReflectionException when not bound to model
      */
-    public function toggleItemAction($uuid, $disabled = null)
+    public function toggleItemAction($uuid, $enabled = null)
     {
-        return $this->toggleBase("aliases.aliases", $uuid);
+        return $this->toggleBase("aliases.alias", $uuid, $enabled);
     }
 
     /**
@@ -181,7 +194,7 @@ class AliasController extends ApiMutableModelControllerBase
             if (empty($line[2]) || strpos($line[2], '/') === false) {
                 continue;
             }
-            if (!empty($result[$line[0]])) {
+            if (!empty($result[$line[0]]) && empty($result[$line[0]]['region'])) {
                 $result[$line[0]]['region'] = explode('/', $line[2])[0];
             }
         }
@@ -196,13 +209,105 @@ class AliasController extends ApiMutableModelControllerBase
         if ($this->request->isPost()) {
             $backend = new Backend();
             $backend->configdRun('template reload OPNsense/Filter');
-            $bckresult = strtolower(
-                trim($backend->configdRun("filter refresh_aliases"))
-            );
-            return array("status" => $bckresult);
+            $backend->configdRun("filter reload skip_alias");
+            $bckresult = json_decode($backend->configdRun("filter refresh_aliases"), true);
+            if (!empty($bckresult['messages'])) {
+                throw new UserException(implode("\n", $bckresult['messages']), gettext("Alias"));
+            }
+            return array("status" => "ok");
         } else {
             return array("status" => "failed");
         }
+    }
 
+    /**
+     * variant on model.getNodes() returning actual field values
+     * @param $parent_node BaseField node to reverse
+     */
+    private function getRawNodes($parent_node)
+    {
+        $result = array();
+        foreach ($parent_node->iterateItems() as $key => $node) {
+            if ($node->isContainer()) {
+                $result[$key] = $this->getRawNodes($node);
+            } else {
+                $result[$key] = (string)$node;
+            }
+        }
+        return $result;
+    }
+
+    /**
+     * export configured aliases
+     */
+    public function exportAction()
+    {
+        if ($this->request->isGet()) {
+            // return raw, unescaped since this content is intended for direct download
+            $this->response->setContentType('application/json', 'UTF-8');
+            $this->response->setContent(json_encode($this->getRawNodes($this->getModel())));
+        } else {
+            throw new UserException("Unsupported request type");
+        }
+    }
+
+    /**
+     * import delivered aliases in post variable "data", validate all only commit when fully valid.
+     */
+    public function importAction()
+    {
+        if ($this->request->isPost()) {
+            $this->sessionClose();
+            $result = array("existing" => 0, "new" => 0, "status" => "failed");
+            $data = $this->request->getPost("data");
+            if (is_array($data) && !empty($data['aliases'])
+                    && !empty($data['aliases']['alias']) && is_array($data['aliases']['alias'])) {
+                Config::getInstance()->lock();
+
+                // save into model
+                $uuid_mapping = array();
+                foreach ($data['aliases']['alias'] as $uuid => $content) {
+                    if (is_array($content) && !empty($content['name'])) {
+                        $node = $this->getModel()->getByName($content['name']);
+                        if ($node == null) {
+                            $node = $this->getModel()->aliases->alias->Add();
+                            $result['new'] += 1;
+                        } else {
+                            $result['existing'] += 1;
+                        }
+                        foreach ($content as $prop => $value) {
+                            $node->$prop = $value;
+                        }
+                        $uuid_mapping[$node->getAttribute('uuid')] = $uuid;
+                    }
+                }
+                // attach this alias to util class, to avoid recursion issues (aliases used in aliases).
+                \OPNsense\Firewall\Util::attachAliasObject($this->getModel());
+
+                // perform validation, record details.
+                foreach ($this->getModel()->performValidation() as $msg) {
+                    if (empty($result['validations'])) {
+                        $result['validations'] = array();
+                    }
+                    $parts = explode('.', $msg->getField());
+                    $uuid = $parts[count($parts)-2];
+                    $fieldname = $parts[count($parts)-1];
+                    $result['validations'][$uuid_mapping[$uuid] . "." . $fieldname] = $msg->getMessage();
+                }
+
+
+                // only persist when valid import
+                if (empty($result['validations'])) {
+                    $result['status'] = "ok";
+                    $this->save();
+                } else {
+                    $result['status'] = "failed";
+                    Config::getInstance()->unlock();
+                }
+            }
+        } else {
+            throw new UserException("Unsupported request type");
+        }
+        return $result;
     }
 }

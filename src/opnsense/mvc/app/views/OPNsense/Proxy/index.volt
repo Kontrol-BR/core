@@ -58,17 +58,6 @@
                     'add':'/api/proxy/settings/addPACMatch/',
                     'del':'/api/proxy/settings/delPACMatch/',
                     'options': {
-                        converters: {
-                            notprefixable: {
-                                to: function (value) {
-                                    if (value.not) {
-                                        return '<i class="fa fa-exclamation"></i> ' + value.val;
-                                    } else {
-                                        return value.val;
-                                    }
-                                }
-                            }
-                        },
                         responseHandler: function (response) {
                             // concatenate fields for not.
                             if ('rows' in response) {
@@ -100,24 +89,11 @@
                 }
         );
 
-        // when  closing DialogEditBlacklist, point the user to the download buttons
-        $("#DialogEditBlacklist").on("show.bs.modal", function () {
-            // wait some time before linking the save button, missing handle
-            setTimeout(function(){
-                $("#btn_DialogEditBlacklist_save").click(function(){
-                    $("#remoteACLchangeMessage").slideDown(1000, function(){
-                        setTimeout(function(){
-                            $("#remoteACLchangeMessage").slideUp(2000);
-                        }, 2000);
-                    });
-                });
-            }, 500);
-        });
         function update_pac_match_view(event) {
             function show_line(the_id) {
                 $('tr[for=' + the_id + ']').show();
             }
-            value = $("#pac\\.match\\.match_type").val();
+            let value = $("#pac\\.match\\.match_type").val();
             if (!value) {
                 // retry later
                 setTimeout(update_pac_match_view, 100);
@@ -156,18 +132,9 @@
                 case "is_resolvable":
                     show_line("pac\\.match\\.hostname");
                     break;
-                case "dns_domain_is":
-                    show_line("pac\\.match\\.hostname");
-                    break;
                 case "dns_domain_levels":
                     show_line("pac\\.match\\.domain_level_from");
                     show_line("pac\\.match\\.domain_level_to");
-                    break;
-                case "dns_domain_is":
-                    show_line("pac\\.match\\.hostname");
-                    break;
-                case "dns_domain_is":
-                    show_line("pac\\.match\\.hostname");
                     break;
                 case "weekday_range":
                     show_line("pac\\.match\\.weekday_from");
@@ -190,7 +157,7 @@
 
         $('.reload-pac-btn').click(function () {
             $('.reload-pac-btn .fa-refresh').addClass('fa-spin');
-            ajaxCall(url="/api/proxy/service/refreshTemplate", sendData={}, callback=function(data,status) {
+            ajaxCall("/api/proxy/service/refreshTemplate", {}, function(data,status) {
                 $('.reload-pac-btn .fa-refresh').removeClass('fa-spin');
             });
         });
@@ -201,7 +168,7 @@
          */
         $("#reconfigureAct").click(function(){
             $("#reconfigureAct_progress").addClass("fa fa-spinner fa-pulse");
-            ajaxCall(url="/api/proxy/service/reconfigure", sendData={}, callback=function(data,status) {
+            ajaxCall("/api/proxy/service/reconfigure", {}, function(data,status) {
                 // when done, disable progress animation.
                 $("#reconfigureAct_progress").removeClass("fa fa-spinner fa-pulse");
 
@@ -222,7 +189,7 @@
          */
         $("#fetchandreconfigureAct").click(function(){
             $("#fetchandreconfigureAct_progress").addClass("fa fa-spinner fa-pulse");
-            ajaxCall(url="/api/proxy/service/fetchacls", sendData={}, callback=function(data,status) {
+            ajaxCall("/api/proxy/service/fetchacls", {}, function(data,status) {
                 // when done, disable progress animation.
                 $("#fetchandreconfigureAct_progress").removeClass("fa fa-spinner fa-pulse");
                 if (status != "success" || data['status'] != 'ok') {
@@ -242,7 +209,7 @@
          */
         $("#downloadAct").click(function(){
             $("#downloadAct_progress").addClass("fa fa-spinner fa-pulse");
-            ajaxCall(url="/api/proxy/service/downloadacls", sendData={}, callback=function(data,status) {
+            ajaxCall("/api/proxy/service/downloadacls", {}, function(data,status) {
                 // when done, disable progress animation.
                 $("#downloadAct_progress").removeClass("fa fa-spinner fa-pulse");
                 if (status != "success" || data['status'] != 'ok') {
@@ -261,7 +228,7 @@
          */
         $("#ScheduleAct").click(function() {
             $("#scheduleAct_progress").addClass("fa fa-spinner fa-pulse");
-            ajaxCall(url="/api/proxy/settings/fetchRBCron", sendData={}, callback=function(data,status) {
+            ajaxCall("/api/proxy/settings/fetchRBCron", {}, function(data,status) {
                 $("#scheduleAct_progress").removeClass("fa fa-spinner fa-pulse");
                 if (data.uuid !=undefined) {
                     // redirect to cron page
@@ -276,12 +243,12 @@
                 var frm_id = $(this).closest("form").attr("id");
                 var frm_title = $(this).closest("form").attr("data-title");
                 // save data for General TAB
-                saveFormToEndpoint(url="/api/proxy/settings/set",formid=frm_id,callback_ok=function(){
+                saveFormToEndpoint("/api/proxy/settings/set", frm_id, function(){
                     // on correct save, perform reconfigure. set progress animation when reloading
                     $("#"+frm_id+"_progress").addClass("fa fa-spinner fa-pulse");
 
                     //
-                    ajaxCall(url="/api/proxy/service/reconfigure", sendData={}, callback=function(data,status){
+                    ajaxCall("/api/proxy/service/reconfigure", {}, function(data,status){
                         // when done, disable progress animation.
                         $("#"+frm_id+"_progress").removeClass("fa fa-spinner fa-pulse");
 
@@ -299,6 +266,33 @@
                     });
                 });
             });
+        });
+
+        $("#resetAct").click(function() {
+
+            BootstrapDialog.show({
+                type:BootstrapDialog.TYPE_DANGER,
+                title: '{{ lang._('Reset') }} ',
+                message: '{{ lang._('Are you sure you want to flush all generated content and restart the proxy?') }}',
+                buttons: [{
+                    label: '{{ lang._('Yes') }}',
+                    cssClass: 'btn-primary',
+                    action: function(dlg){
+                        dlg.close();
+                        $("#resetAct_progress").addClass("fa fa-spinner fa-pulse");
+                        ajaxCall("/api/proxy/service/reset", {}, function(data,status) {
+                            $("#resetAct_progress").removeClass("fa fa-spinner fa-pulse");
+                            updateServiceControlUI('proxy');
+                        });
+                    }
+                }, {
+                    label: '{{ lang._('No') }}',
+                    action: function(dlg){
+                        dlg.close();
+                    }
+                }]
+            });
+
         });
 
         // update history on tab state and implement navigation
@@ -334,6 +328,7 @@
         </ul>
     </li>
     <li><a data-toggle="tab" href="#remote_acls"><b>{{ lang._('Remote Access Control Lists') }}</b></a></li>
+    <li><a data-toggle="tab" href="#support"><b>{{ lang._('Support') }}</b></a></li>
 </ul>
 
 <div class="content-box tab-content">
@@ -442,7 +437,7 @@
                     <div id="remoteACLchangeMessage" class="alert alert-info" style="display: none" role="alert">
                         {{ lang._('After changing categories, please remember to download the ACL again to apply your new settings') }}
                     </div>
-                    <table id="grid-remote-blacklists" class="table table-condensed table-hover table-striped table-responsive" data-editDialog="DialogEditBlacklist">
+                    <table id="grid-remote-blacklists" class="table table-condensed table-hover table-striped table-responsive" data-editDialog="DialogEditBlacklist" data-editAlert="remoteACLchangeMessage">
                         <thead>
                         <tr>
                             <th data-column-id="enabled" data-formatter="rowtoggle" data-sortable="false"  data-width="6em">{{ lang._('Enabled') }}</th>
@@ -472,6 +467,26 @@
                     </div>
                 </td>
             </tr>
+            </tbody>
+        </table>
+    </div>
+    <div id="support" class="tab-pane fade">
+        <table class="table table-striped table-condensed">
+            <thead>
+                <tr>
+                    <th>{{ lang._('Action')}}</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+              <tr>
+                  <td>
+                      <button class="btn btn-primary" id="resetAct" type="button">{{ lang._('Reset') }}<i id="resetAct_progress" class=""></button>
+                  </td>
+                  <td>
+                      {{ lang._('Reset all generated content (cached files and certificates included) and restart the proxy.') }}
+                  </td>
+              </tr>
             </tbody>
         </table>
     </div>

@@ -300,7 +300,7 @@ class MenuItem
 
     /**
      * append node, reuses existing node if it's already there.
-     * @param $id item id
+     * @param string $id item id
      * @param array $properties named array property list, there should be setters for every option
      * @return MenuItem
      */
@@ -382,7 +382,7 @@ class MenuItem
     }
 
     /**
-     * set url and all it's parents selected
+     * set url and all its parents selected
      * @param string $url target url
      */
     public function toggleSelected($url)

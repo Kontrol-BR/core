@@ -1,39 +1,39 @@
 <?php
 
 /*
-    Copyright (C) 2014-2016 Deciso B.V.
-    Copyright (C) 2003-2005 Manuel Kasper <mk@neon1.net>.
-    Copyright (C) 2008 Shrew Soft Inc. <mgrooms@shrew.net>
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are met:
-
-    1. Redistributions of source code must retain the above copyright notice,
-       this list of conditions and the following disclaimer.
-
-    2. Redistributions in binary form must reproduce the above copyright
-       notice, this list of conditions and the following disclaimer in the
-       documentation and/or other materials provided with the distribution.
-
-    THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES,
-    INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
-    AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
-    AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
-    OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-    SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-    INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-    CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-    ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
-*/
+ * Copyright (C) 2014-2016 Deciso B.V.
+ * Copyright (C) 2003-2005 Manuel Kasper <mk@neon1.net>
+ * Copyright (C) 2008 Shrew Soft Inc. <mgrooms@shrew.net>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice,
+ *    this list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES,
+ * INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
+ * AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ * AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+ * OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
 
 require_once("guiconfig.inc");
 require_once("system.inc");
 require_once("filter.inc");
-require_once("plugins.inc.d/ipsec.inc");
 require_once("services.inc");
 require_once("interfaces.inc");
+require_once("plugins.inc.d/ipsec.inc");
 
 /*
  *  Return phase2 idinfo in text format
@@ -94,7 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         foreach ($del_items as $p1entrydel) {
             /* remove static route if interface is not WAN */
-            if ($a_phase1[$p1entrydel]['interface'] <> "wan") {
+            if ($a_phase1[$p1entrydel]['interface'] != 'wan') {
                 /* XXX does this even apply? only use of system.inc at the top! */
                 system_host_route($a_phase1[$p1entrydel]['remote-gateway'], $a_phase1[$p1entrydel]['remote-gateway'], true, false);
             }
@@ -183,7 +183,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 legacy_html_escape_form_data($a_phase1);
 legacy_html_escape_form_data($a_phase2);
 
-$service_hook = 'ipsec';
+$service_hook = 'strongswan';
 
 include("head.inc");
 
@@ -206,6 +206,7 @@ $dhgroups = array(
     28 => '28 (Brainpool EC 256 bits)',
     29 => '29 (Brainpool EC 384 bits)',
     30 => '30 (Brainpool EC 512 bits)',
+    31 => '31 (Elliptic Curve 25519)',
 );
 
 ?>
@@ -384,16 +385,6 @@ $( document ).ready(function() {
                             foreach ($aliaslist as $aliasip => $aliasif) {
                                 $iflabels[$aliasip] = $aliasip." (".get_vip_descr($aliasip).")";
                             }
-
-                            $grouplist = return_gateway_groups_array();
-                            foreach ($grouplist as $name => $group) {
-                                if ($group[0]['vip'] <> "") {
-                                    $vipif = $group[0]['vip'];
-                                } else {
-                                    $vipif = $group[0]['int'];
-                                }
-                                $iflabels[$name] = "GW Group {$name}";
-                            }
                             $if = $iflabels[$ph1ent['interface']];
                         } else {
                             $if = "WAN";
@@ -419,8 +410,10 @@ $( document ).ready(function() {
                             }
                         }?> +
 
-                        <?=strtoupper($ph1ent['hash-algorithm']);?> +
-                          <?=gettext("DH Group"); ?>&nbsp;<?=$dhgroups[$ph1ent['dhgroup']];?>
+                        <?=strtoupper($ph1ent['hash-algorithm']);?>
+<?php if (!empty($ph1ent['dhgroup'])): ?>
+                          + <?=gettext("DH Group"); ?>&nbsp;<?= $ph1ent['dhgroup'] ?>
+<?php endif ?>
                       </td>
                       <td class="hidden-xs">
                           <?= html_safe($p1_authentication_methods[$ph1ent['authentication_method']]['name']) ?>
@@ -430,7 +423,7 @@ $( document ).ready(function() {
                       </td>
                       <td class="text-nowrap">
                         <button data-id="<?=$i; ?>" data-act="movep1" type="submit" class="act_move btn btn-default btn-xs"
-                          title="<?=gettext("move selected entries before this");?>" data-toggle="tooltip">
+                          title="<?=gettext("Move selected entries before this");?>" data-toggle="tooltip">
                           <i class="fa fa-arrow-left fa-fw"></i>
                         </button>
                         <a href="vpn_ipsec_phase1.php?p1index=<?=$i; ?>" class="btn btn-default btn-xs"
@@ -501,7 +494,7 @@ $( document ).ready(function() {
                                 </td>
                                 <td class="hidden-xs">
                                   <?=$p2_protos[$ph2ent['protocol']];?>
-                                  <?=isset($ph2ent['mode']) ? array_search($ph2ent['mode'], array("IPv4 tunnel" => "tunnel", "IPv6 tunnel" => "tunnel6", "transport" => "transport")) : ""; ?>
+                                  <?=isset($ph2ent['mode']) ? array_search($ph2ent['mode'], array("IPv4 tunnel" => "tunnel", "IPv6 tunnel" => "tunnel6", "transport" => "transport", "Route-based" => "route-based")) : ""; ?>
                                 </td>
 <?php
                                 if (($ph2ent['mode'] == "tunnel") || ($ph2ent['mode'] == "tunnel6")) :?>
@@ -511,6 +504,10 @@ $( document ).ready(function() {
                                 <td>
                                   <?=ipsec_idinfo_to_text($ph2ent['remoteid']); ?>
                                 </td>
+<?php
+                                elseif ($ph2ent['mode'] == "route-based"):?>
+                                <td><?=$ph2ent['tunnel_local'];?></td>
+                                <td><?=$ph2ent['tunnel_remote'];?></td>
 <?php
                                 else :?>
                                 <td>&nbsp;</td>
@@ -556,7 +553,7 @@ $( document ).ready(function() {
                                 endif; ?>
                                 <td class="text-nowrap">
                                   <button data-id="<?=$j; ?>" data-act="movep2" type="submit" class="act_move btn btn-default btn-xs"
-                                    title="<?=gettext("move selected entries before this");?>" data-toggle="tooltip">
+                                    title="<?=gettext("Move selected entries before this");?>" data-toggle="tooltip">
                                     <i class="fa fa-arrow-left fa-fw"></i>
                                   </button>
                                   <a href="vpn_ipsec_phase2.php?p2index=<?=$ph2ent['uniqid']; ?>"
@@ -585,7 +582,7 @@ $( document ).ready(function() {
                                 if ($j > 0) :?>
 
                                   <button data-id="<?=$j+1; ?>" data-act="movep2" type="submit" class="act_move btn btn-default btn-xs"
-                                    title="<?=gettext("move selected phase 2 entries to end");?>" data-toggle="tooltip">
+                                    title="<?=gettext("Move selected phase 2 entries to end");?>" data-toggle="tooltip">
                                     <i class="fa fa-arrow-down fa-fw"></i>
                                   </button>
                                   <button data-id="x" type="submit" title="<?=gettext("delete selected phase 2 entries");?>" data-toggle="tooltip"
@@ -616,7 +613,7 @@ $( document ).ready(function() {
                           type="submit"
                           data-id="<?=$i;?>"
                           data-act="movep1"
-                          title="<?=gettext("move selected phase 1 entries to end");?>"
+                          title="<?=gettext("Move selected phase 1 entries to end");?>"
                           data-toggle="tooltip"
                           class="act_move btn btn-default btn-xs">
                           <i class="fa fa-arrow-down fa-fw"></i>
@@ -642,7 +639,7 @@ $( document ).ready(function() {
                     </tr>
                     <tr>
                       <td colspan=9>
-                        <input type="submit" name="save" class="btn btn-primary" value="<?=gettext("Save"); ?>" />
+                        <input type="submit" name="save" class="btn btn-primary" value="<?=html_safe(gettext('Save')); ?>" />
                       </td>
                     </tr>
                 </tbody>

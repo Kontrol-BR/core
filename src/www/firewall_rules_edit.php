@@ -1,32 +1,32 @@
 <?php
 
 /*
-    Copyright (C) 2014 Deciso B.V.
-    Copyright (C) 2005 Scott Ullrich <sullrich@gmail.com>
-    Copyright (C) 2003-2004 Manuel Kasper <mk@neon1.net>.
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are met:
-
-    1. Redistributions of source code must retain the above copyright notice,
-       this list of conditions and the following disclaimer.
-
-    2. Redistributions in binary form must reproduce the above copyright
-       notice, this list of conditions and the following disclaimer in the
-       documentation and/or other materials provided with the distribution.
-
-    THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES,
-    INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
-    AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
-    AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
-    OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-    SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-    INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-    CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-    ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
-*/
+ * Copyright (C) 2014 Deciso B.V.
+ * Copyright (C) 2005 Scott Ullrich <sullrich@gmail.com>
+ * Copyright (C) 2003-2004 Manuel Kasper <mk@neon1.net>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice,
+ *    this list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES,
+ * INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
+ * AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ * AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+ * OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
 
 require_once("guiconfig.inc");
 require_once("interfaces.inc");
@@ -40,6 +40,7 @@ $ostypes = json_decode(configd_run('filter list osfp json'));
 if ($ostypes == null) {
     $ostypes = array();
 }
+$gateways = new \OPNsense\Routing\Gateways(legacy_interfaces_details());
 
 
 /**
@@ -99,6 +100,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         'floating',
         'gateway',
         'icmptype',
+        'icmp6-type',
         'interface',
         'ipprotocol',
         'log',
@@ -219,32 +221,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $input_errors[] = gettext("You can not assign a gateway to a rule that applies to IPv4 and IPv6");
     }
     if (!empty($pconfig['gateway']) && isset($config['gateways']['gateway_group'])) {
-        foreach($config['gateways']['gateway_group'] as $gw_group) {
-            if($gw_group['name'] == $pconfig['gateway']) {
-                $a_gatewaygroups = return_gateway_groups_array();
-                $family = 'inet';
-                if ( count($a_gatewaygroups[$pconfig['gateway']]) > 0 &&
-                     is_ipaddrv6($a_gatewaygroups[$pconfig['gateway']][0]['gwip'])) {
-                    $family = 'inet6';
-                }
-                if(($pconfig['ipprotocol'] == "inet6") && ($pconfig['ipprotocol'] != $family)) {
-                    $input_errors[] = gettext('You can not assign an IPv4 gateway group on an IPv6 rule.');
-                }
-                if(($pconfig['ipprotocol'] == "inet") && ($pconfig['ipprotocol'] != $family)) {
-                    $input_errors[] = gettext('You can not assign an IPv6 gateway group on an IPv4 rule.');
-                }
-            }
+        $family = $gateways->getGroupIPProto($pconfig['gateway']);
+        if ($family !== null && $pconfig['ipprotocol'] == "inet6" && $pconfig['ipprotocol'] != $family) {
+            $input_errors[] = gettext('You can not assign an IPv4 gateway group on an IPv6 rule.');
+        }
+        if ($family !== null && $pconfig['ipprotocol'] == "inet" && $pconfig['ipprotocol'] != $family) {
+            $input_errors[] = gettext('You can not assign an IPv6 gateway group on an IPv4 rule.');
         }
     }
-    if (!empty($pconfig['gateway']) && is_ipaddr(lookup_gateway_ip_by_name($pconfig['gateway']))) {
-        if ($pconfig['ipprotocol'] == "inet6" && !is_ipaddrv6(lookup_gateway_ip_by_name($pconfig['gateway']))) {
+    if (!empty($pconfig['gateway']) && is_ipaddr($gateways->getAddress($pconfig['gateway']))) {
+        if ($pconfig['ipprotocol'] == "inet6" && !is_ipaddrv6($gateways->getAddress($pconfig['gateway']))) {
             $input_errors[] = gettext('You can not assign the IPv4 Gateway to an IPv6 filter rule.');
         }
-        if ($pconfig['ipprotocol'] == "inet" && !is_ipaddrv4(lookup_gateway_ip_by_name($pconfig['gateway']))) {
+        if ($pconfig['ipprotocol'] == "inet" && !is_ipaddrv4($gateways->getAddress($pconfig['gateway']))) {
             $input_errors[] = gettext('You can not assign the IPv6 Gateway to an IPv4 filter rule.');
         }
     }
     if ($pconfig['protocol'] == "icmp" && !empty($pconfig['icmptype']) && $pconfig['ipprotocol'] == "inet46") {
+        $input_errors[] =  gettext('You can not assign an ICMP type to a rule that applies to IPv4 and IPv6.');
+    } elseif ($pconfig['protocol'] == "ipv6-icmp" && !empty($pconfig['icmp6-type']) && $pconfig['ipprotocol'] == "inet46") {
         $input_errors[] =  gettext('You can not assign an ICMP type to a rule that applies to IPv4 and IPv6.');
     }
     if ($pconfig['statetype'] == "synproxy state" || $pconfig['statetype'] == "modulate state") {
@@ -286,8 +281,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $input_errors[] = gettext("A valid destination bit count must be specified.");
         }
     }
-    if (is_ipaddr($pconfig['src']) && is_ipaddr($pconfig['dst']) && !validate_address_family($pconfig['src'], $pconfig['dst'])) {
-        $input_errors[] = sprintf(gettext("The Source IP address %s Address Family differs from the destination %s."), $pconfig['src'], $pconfig['dst']);
+
+    if (is_ipaddr($pconfig['src']) && is_ipaddr($pconfig['dst'])) {
+        if ((is_ipaddrv4($pconfig['src']) && is_ipaddrv6($pconfig['dst'])) || (is_ipaddrv6($pconfig['src']) && is_ipaddrv4($pconfig['dst']))) {
+            $input_errors[] = sprintf(gettext("The Source IP address %s Address Family differs from the destination %s."), $pconfig['src'], $pconfig['dst']);
+        }
     }
     foreach (array('src', 'dst') as $fam) {
         if (is_ipaddr($pconfig[$fam])) {
@@ -330,7 +328,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
       if (!empty($pconfig['statetimeout']))
           $input_errors[] = gettext("You can only specify the state timeout (advanced option) for TCP protocol.");
     }
-    if ($pconfig['type'] <> "pass") {
+    if ($pconfig['type'] != 'pass') {
       if (!empty($pconfig['max']))
           $input_errors[] = gettext("You can only specify the maximum state entries (advanced option) for Pass type rules.");
       if (!empty($pconfig['max-src-nodes']))
@@ -485,6 +483,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
         if ($pconfig['protocol'] == "icmp" && !empty($pconfig['icmptype'])) {
             $filterent['icmptype'] = $pconfig['icmptype'];
+        } elseif ($pconfig['protocol'] == 'ipv6-icmp' && !empty($pconfig['icmp6-type'])) {
+            $filterent['icmp6-type'] = $pconfig['icmp6-type'];
         }
 
         // reset port values for non tcp/udp traffic
@@ -534,6 +534,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 }
 
 legacy_html_escape_form_data($pconfig);
+legacy_html_escape_form_data($a_filter);
 
 $priorities = interfaces_vlan_priorities();
 
@@ -590,11 +591,14 @@ include("head.inc");
       });
 
       $("#proto").change(function() {
+          $("#icmpbox").addClass("hidden");
+          $("#icmp6box").addClass("hidden");
           if ( $("#proto").val() == 'icmp' ) {
               $("#icmpbox").removeClass("hidden");
-          } else {
-              $("#icmpbox").addClass("hidden");
+          } else if ( $("#proto").val() == 'ipv6-icmp' ) {
+              $("#icmp6box").removeClass("hidden");
           }
+          let port_disabled = true;
           // lock src/dst ports on other then tcp/udp
           if ($("#proto").val() == 'tcp' || $("#proto").val() == 'udp' || $("#proto").val() == 'tcp/udp') {
               port_disabled = false;
@@ -871,6 +875,53 @@ include("head.inc");
                       </div>
                     </td>
                   </tr>
+                  <tr id="icmp6box">
+                    <td><a id="help_for_icmp6-type" href="#" class="showhelp"><i class="fa fa-info-circle"></i></a> <?=gettext("ICMP6 type");?></td>
+                    <td>
+                      <select <?=!empty($pconfig['associated-rule-id']) ? "disabled" : "";?> name="icmp6-type" class="selectpicker" data-live-search="true" data-size="5" >
+<?php
+                      $icmp6types = array(
+                          "" => gettext("any"),
+                          "unreach" => gettext("Destination unreachable"),
+                          "toobig" => gettext("Packet too big"),
+                          "timex" => gettext("Time exceeded"),
+                          "paramprob" => gettext("Invalid IPv6 header"),
+                          "echoreq" => gettext("Echo service request"),
+                          "echorep" => gettext("Echo service reply"),
+                          "groupqry" => gettext("Group membership query"),
+                          "listqry" => gettext("Multicast listener query"),
+                          "grouprep" => gettext("Group membership report"),
+                          "listenrep" => gettext("Multicast listener report"),
+                          "groupterm" => gettext("Group membership termination"),
+                          "listendone" => gettext("Multicast listener done"),
+                          "routersol" => gettext("Router solicitation"),
+                          "routeradv" => gettext("Router advertisement"),
+                          "neighbrsol" => gettext("Neighbor solicitation"),
+                          "neighbradv" => gettext("Neighbor advertisement"),
+                          "redir" => gettext("Shorter route exists"),
+                          "routrrenum" => gettext("Route renumbering"),
+                          "fqdnreq" => gettext("FQDN query"),
+                          "niqry" => gettext("Node information query"),
+                          "wrureq" => gettext("Who-are-you request"),
+                          "fqdnrep" => gettext("FQDN reply"),
+                          "nirep" => gettext("Node information reply"),
+                          "wrurep" => gettext("Who-are-you reply"),
+                          "mtraceresp" => gettext("mtrace response"),
+                          "mtrace" => gettext("mtrace messages")
+                      );
+
+                      foreach ($icmp6types as $icmp6type => $descr): ?>
+                        <option value="<?=$icmp6type;?>" <?= $icmp6type == $pconfig['icmp6-type'] ? "selected=\"selected\"" : ""; ?>>
+                          <?=$descr;?>
+                        </option>
+<?php
+                      endforeach; ?>
+                      </select>
+                      <div class="hidden" data-for="help_for_icmp6-type">
+                        <?=gettext("If you selected ICMP6 for the protocol above, you may specify an ICMP6 type here.");?>
+                      </div>
+                    </td>
+                  </tr>
                   <tr>
                     <td> <a id="help_for_src_invert" href="#" class="showhelp"><i class="fa fa-info-circle"></i></a> <?=gettext("Source") . " / ".gettext("Invert");?> </td>
                     <td>
@@ -906,7 +957,7 @@ include("head.inc");
                         <tr>
                           <td>
                             <div>
-                              <table style="border:0; cellpadding:0; cellspacing:0">
+                              <table style="border:0;">
                                 <tbody>
                                   <tr>
                                       <td style="width:348px">
@@ -932,7 +983,7 @@ include("head.inc");
                   <tr class="advanced_opt_src visible">
                     <td><?=gettext("Source"); ?></td>
                     <td>
-                      <input type="button" class="btn btn-default" value="<?=gettext("Advanced"); ?>" id="showadvancedboxsrc" />
+                      <input type="button" class="btn btn-default" value="<?= html_safe(gettext('Advanced')) ?>" id="showadvancedboxsrc" />
                       <div class="hidden" data-for="help_for_source">
                         <?=gettext("Show source address and port range"); ?>
                       </div>
@@ -1035,7 +1086,7 @@ include("head.inc");
                         </tr>
                         <tr>
                           <td>
-                            <table style="border:0; cellpadding:0; cellspacing:0">
+                            <table style="border:0;">
                               <tbody>
                                 <tr>
                                     <td style="width:348px">
@@ -1218,7 +1269,7 @@ include("head.inc");
                         <select name='gateway' class="selectpicker" data-live-search="true" data-size="5" data-width="auto">
                         <option value="" ><?=gettext("default");?></option>
 <?php
-                        foreach(return_gateways_array(true, true, true) as $gwname => $gw):
+                        foreach($gateways->gatewaysIndexedByName(true, true, true) as $gwname => $gw):
 ?>
                           <option value="<?=$gwname;?>" <?=$gwname == $pconfig['gateway'] ? " selected=\"selected\"" : "";?>>
                             <?=$gw['name'];?>
@@ -1226,12 +1277,10 @@ include("head.inc");
                           </option>
 <?php
                         endforeach;
-                        $a_gatewaygroups = return_gateway_groups_array();
-                        foreach($a_gatewaygroups as $gwg_name => $gwg_data):?>
+                        foreach ($gateways->getGroupNames() as $gwg_name):?>
                           <option value="<?=$gwg_name;?>" <?=$gwg_name == $pconfig['gateway'] ? " selected=\"selected\"" : "";?>>
                             <?=$gwg_name;?>
                           </option>
-
 <?php
                         endforeach;?>
                         </select>
@@ -1243,7 +1292,7 @@ include("head.inc");
                   <tr>
                     <td><?=gettext("Advanced Options");?></td>
                     <td>
-                      <input id="toggleAdvanced" type="button" class="btn btn-default" value="<?=gettext("Show/Hide"); ?>" />
+                      <input id="toggleAdvanced" type="button" class="btn btn-default" value="<?= html_safe(gettext('Show/Hide')) ?>" />
                     </td>
                   </tr>
                   <tr class="opt_advanced hidden">
@@ -1280,17 +1329,17 @@ include("head.inc");
                                   <td>
                                     <select name="set-prio">
                                         <option value=""<?=(!isset($pconfig['set-prio']) || $pconfig['set-prio'] === '' ? ' selected="selected"' : '');?>><?=htmlspecialchars(gettext('Keep current priority'));?></option>
-<? foreach ($priorities as $prio => $priority): ?>
+<?php foreach ($priorities as $prio => $priority): ?>
                                         <option value="<?=$prio;?>"<?=(isset($pconfig['set-prio']) && $pconfig['set-prio'] !== '' && $pconfig['set-prio'] == $prio ? ' selected="selected"' : '');?>><?=htmlspecialchars($priority);?></option>
-<? endforeach ?>
+<?php endforeach ?>
                                     </select>
                                   </td>
                                   <td>
                                     <select name="set-prio-low">
                                         <option value=""<?=(!isset($pconfig['set-prio-low']) || $pconfig['set-prio-low'] === '' ? ' selected="selected"' : '');?>><?=htmlspecialchars(gettext('Use main priority'));?></option>
-<? foreach ($priorities as $prio => $priority): ?>
+<?php foreach ($priorities as $prio => $priority): ?>
                                         <option value="<?=$prio;?>"<?=(isset($pconfig['set-prio-low']) && $pconfig['set-prio-low'] !== '' && $pconfig['set-prio-low'] == $prio ? ' selected="selected"' : '');?>><?=htmlspecialchars($priority);?></option>
-<? endforeach ?>
+<?php endforeach ?>
                                     </select>
                                   </td>
                               </tr>
@@ -1305,9 +1354,9 @@ include("head.inc");
                       <td>
                         <select name="prio">
                             <option value=""<?=(!isset($pconfig['prio']) || $pconfig['prio'] === '' ? ' selected="selected"' : '');?>><?=htmlspecialchars(gettext('Any priority'));?></option>
-<? foreach ($priorities as $prio => $priority): ?>
+<?php foreach ($priorities as $prio => $priority): ?>
                             <option value="<?=$prio;?>"<?=(isset($pconfig['prio']) && $pconfig['prio'] !== '' && $pconfig['prio'] == $prio ? ' selected="selected"' : '');?>><?=htmlspecialchars($priority);?></option>
-<? endforeach ?>
+<?php endforeach ?>
                         </select>
                         <div class="hidden" data-for="help_for_prio">
                           <?=gettext('Match on the priority of packets.');?>
@@ -1346,7 +1395,7 @@ include("head.inc");
                       <td>
                         <input name="max-src-nodes" type="text" value="<?=$pconfig['max-src-nodes'];?>"/>
                         <div class="hidden" data-for="help_for_max-src-nodes">
-                          <?=gettext(" Maximum number of unique source hosts");?>
+                          <?=gettext("Maximum number of unique source hosts");?>
                         </div>
                       </td>
                   </tr>
@@ -1355,7 +1404,7 @@ include("head.inc");
                       <td>
                         <input name="max-src-conn" type="text" value="<?= $pconfig['max-src-conn'];?>" />
                         <div class="hidden" data-for="help_for_max-src-conn">
-                            <?=gettext(" Maximum number of established connections per host (TCP only)");?>
+                            <?=gettext("Maximum number of established connections per host (TCP only)");?>
                         </div>
                       </td>
                   </tr>
@@ -1364,14 +1413,14 @@ include("head.inc");
                       <td>
                         <input name="max-src-states" type="text" value="<?=$pconfig['max-src-states'];?>" />
                         <div class="hidden" data-for="help_for_max-src-states">
-                            <?=gettext(" Maximum state entries per host");?>
+                            <?=gettext("Maximum state entries per host");?>
                         </div>
                       </td>
                   </tr>
                   <tr class="opt_advanced hidden">
                       <td><a id="help_for_max-src-conn-rate" href="#" class="showhelp"><i class="fa fa-info-circle"></i></a> <?=gettext("Max new connections");?> </td>
                       <td>
-                        <table style="border:0; cellspacing:0; cellpadding:0">
+                        <table style="border:0;">
                           <tbody>
                             <tr>
                               <td>
@@ -1501,7 +1550,7 @@ include("head.inc");
                     <tr>
                       <td><?=gettext("Created");?></td>
                       <td>
-                        <?= date(gettext("n/j/y H:i:s"), $a_filter[$id]['created']['time']) ?> <?= gettext("by") ?> <strong><?= $a_filter[$id]['created']['username'] ?></strong>
+                        <?= date(gettext('n/j/y H:i:s'), $a_filter[$id]['created']['time']) ?> (<?= $a_filter[$id]['created']['username'] ?>)
                       </td>
                     </tr>
 <?php
@@ -1510,7 +1559,7 @@ include("head.inc");
                     <tr>
                       <td><?=gettext("Updated");?></td>
                       <td>
-                        <?= date(gettext("n/j/y H:i:s"), $a_filter[$id]['updated']['time']) ?> <?= gettext("by") ?> <strong><?= $a_filter[$id]['updated']['username'] ?></strong>
+                        <?= date(gettext('n/j/y H:i:s'), $a_filter[$id]['updated']['time']) ?> (<?= $a_filter[$id]['updated']['username'] ?>)
                       </td>
                     </tr>
 <?php
@@ -1519,8 +1568,8 @@ include("head.inc");
                     <tr>
                       <td>&nbsp;</td>
                       <td>
-                        <input name="Submit" type="submit" class="btn btn-primary" value="<?=gettext("Save"); ?>" />
-                        <input type="button" class="btn btn-default" value="<?=gettext("Cancel");?>" onclick="window.location.href='/firewall_rules.php?if=<?= !empty($pconfig['floating']) ? 'FloatingRules' : $pconfig['interface'] ?>'" />
+                        <input name="Submit" type="submit" class="btn btn-primary" value="<?=html_safe(gettext('Save')); ?>" />
+                        <input type="button" class="btn btn-default" value="<?=html_safe(gettext('Cancel'));?>" onclick="window.location.href='/firewall_rules.php?if=<?= !empty($pconfig['floating']) ? 'FloatingRules' : $pconfig['interface'] ?>'" />
                       </td>
                     </tr>
                   </table>

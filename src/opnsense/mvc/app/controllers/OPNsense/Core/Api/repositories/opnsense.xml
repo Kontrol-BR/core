@@ -17,10 +17,6 @@
             <description>Deciso (HTTPS, NL, Commercial)</description>
         </mirror>
         <mirror>
-            <url>http://mirror.dataroute.de/opnsense</url>
-            <description>Dataroute (HTTP, Dusseldorf, DE)</description>
-        </mirror>
-        <mirror>
             <url>https://mirror.dns-root.de/opnsense</url>
             <description>dns-root.de (HTTPS, Cloudflare CDN)</description>
         </mirror>
@@ -35,6 +31,14 @@
         <mirror>
             <url>https://fourdots.com/mirror/OPNSense</url>
             <description>FourDots (HTTPS, Belgrade, RS)</description>
+        </mirror>
+        <mirror>
+            <url>https://mirror.homelab.no/opnsense</url>
+            <description>Homelab.no (HTTPS, Horten, Norway)</description>
+        </mirror>
+        <mirror>
+            <url>http://mirror.as24220.net/opnsense</url>
+            <description>Hostcentral (HTTP, Melbourne, Australia)</description>
         </mirror>
         <mirror>
             <url>https://opnsense-mirror.hiho.ch</url>
@@ -69,12 +73,16 @@
             <description>OPNsense (HTTPS, Amsterdam, NL)</description>
         </mirror>
         <mirror>
-            <url>http://mirror.ragenetwork.de/opnsense</url>
-            <description>RageNetwork (HTTP, Munich, DE)</description>
+            <url>https://mirror.ragenetwork.de/opnsense</url>
+            <description>RageNetwork (HTTPS, Munich, DE)</description>
         </mirror>
         <mirror>
             <url>http://mirror.upb.edu.co/opnsense</url>
             <description>Universidad Pontificia Bolivariana (HTTP, Medellin, CO)</description>
+        </mirror>
+        <mirror>
+            <url>https://www.mirrorservice.org/sites/opnsense.org</url>
+            <description>University of Kent (HTTPS, Kent, GB)</description>
         </mirror>
         <mirror>
             <url>http://mirror.venturasystems.tech/opnsense</url>

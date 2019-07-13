@@ -24,18 +24,6 @@
 // {{{ constants
 
 /**
- * Error message if netmask bits was not found
- * @see isInNetmask
- */
-define("NET_IPV6_NO_NETMASK_MSG", "Netmask length not found");
-
-/**
- * Error code if netmask bits was not found
- * @see isInNetmask
- */
-define("NET_IPV6_NO_NETMASK", 10);
-
-/**
  * Address Type: Unassigned (RFC 1884, Section 2.3)
  * @see getAddressType()
  */
@@ -139,7 +127,7 @@ class Net_IPv6
      *
      * @param String $ip the (compressed) IP as Hex representation
      *
-     * @return Array the first element is the IP, the second the prefix length
+     * @return array the first element is the IP, the second the prefix length
      * @since  1.2.0
      * @access public
      * @static
@@ -276,9 +264,7 @@ class Net_IPv6
                 $addr = $elements[0];
                 $bits = $elements[1];
             } else {
-                include_once 'PEAR.inc';
-                return PEAR::raiseError(NET_IPV6_NO_NETMASK_MSG,
-                                        NET_IPV6_NO_NETMASK);
+                return null;
             }
         } else {
             $addr = $ip;
@@ -308,7 +294,7 @@ class Net_IPv6
      * @access public
      * @static
      */
-    public static function isInNetmask($ip, $netmask, $bits=null)
+    public static function isInNetmask($ip, $netmask, $bits = null)
     {
         // try to get the bit count
 
@@ -325,9 +311,7 @@ class Net_IPv6
                 }
 
                 if (null == $bits) {
-                    include_once 'PEAR.inc';
-                    return PEAR::raiseError(NET_IPV6_NO_NETMASK_MSG,
-                                            NET_IPV6_NO_NETMASK);
+                    return null;
                 }
             }
         }
@@ -471,12 +455,11 @@ class Net_IPv6
         $c1 = -1;
         $c2 = -1;
 
-        if (false !== strpos($uip, '::') ) {
+        if (false !== strpos($uip, '::')) {
             list($ip1, $ip2) = explode('::', $uip);
             if ("" == $ip1) {
                 $c1 = -1;
             } else {
-                $pos = 0;
                 if (0 < ($pos = substr_count($ip1, ':'))) {
                     $c1 = $pos;
                 } else {
@@ -486,7 +469,6 @@ class Net_IPv6
             if ("" == $ip2) {
                 $c2 = -1;
             } else {
-                $pos = 0;
                 if (0 < ($pos = substr_count($ip2, ':'))) {
                     $c2 = $pos;
                 } else {
@@ -515,7 +497,7 @@ class Net_IPv6
         if (true == $leadingZeros) {
             $uipT    = array();
             $uiparts = explode(':', $uip);
-            foreach($uiparts as $p) {
+            foreach ($uiparts as $p) {
                 $uipT[] = sprintf('%04s', $p);
             }
             $uip = implode(':', $uipT);
@@ -610,7 +592,6 @@ class Net_IPv6
         }
 
         return $cip.$prefix;
-
     }
 
     // }}}
@@ -657,7 +638,7 @@ class Net_IPv6
      */
     function isCompressible($ip)
     {
-        return (bool)($ip != Net_IPv6::compress($address));
+        return (bool)($ip != Net_IPv6::compress($ip));
     }
 
     // }}}
@@ -676,7 +657,7 @@ class Net_IPv6
      * @param Boolean $uncompress if true, the address will be uncompressed
      *                            before processing
      *
-     * @return Array  [0] contains the IPv6 part,
+     * @return array  [0] contains the IPv6 part,
      *                [1] the IPv4 part (hex format)
      * @access public
      * @static
@@ -726,7 +707,7 @@ class Net_IPv6
 
         if (!empty($ipPart[0])) {
             $ipv6 = explode(':', $ipPart[0]);
-            foreach($ipv6 as $element) { // made a validate precheck
+            foreach ($ipv6 as $element) { // made a validate precheck
                 if (!preg_match('/[0-9a-fA-F]*/', $element)) {
                     return false;
                 }
@@ -786,7 +767,7 @@ class Net_IPv6
      * @param String $ipToParse the IPv6 address
      * @param String $bits      the optional count of netmask bits
      *
-     * @return Array ['start', 'end'] the lowest and highest IPv6 address
+     * @return array ['start', 'end'] the lowest and highest IPv6 address
      * @access public
      * @static
      * @author Nicholas Williams
@@ -796,15 +777,13 @@ class Net_IPv6
     {
         $ip      = null;
         $bitmask = null;
-        if ( null == $bits ) {
+        if (null == $bits) {
             $elements = explode('/', $ipToParse);
-            if ( 2 == count($elements) ) {
+            if (2 == count($elements)) {
                 $ip      = Net_IPv6::uncompress($elements[0]);
                 $bitmask = $elements[1];
             } else {
-                include_once 'PEAR.inc';
-                return PEAR::raiseError(NET_IPV6_NO_NETMASK_MSG,
-                                        NET_IPV6_NO_NETMASK);
+                return null;
             }
         } else {
             $ip      = Net_IPv6::uncompress($ipToParse);
@@ -814,7 +793,6 @@ class Net_IPv6
         $binNetmask = str_repeat('1', $bitmask).
                       str_repeat('0', 128 - $bitmask);
         $maxNetmask = str_repeat('1', 128);
-        $netmask    = Net_IPv6::_bin2Ip($binNetmask);
 
         $startAddress = Net_IPv6::_bin2Ip(Net_IPv6::_ip2Bin($ip)
                                           & $binNetmask);
@@ -847,7 +825,7 @@ class Net_IPv6
 
         $parts = explode(':', $ip);
 
-        foreach ( $parts as $v ) {
+        foreach ($parts as $v) {
             $str     = base_convert($v, 16, 2);
             $binstr .= str_pad($str, 16, '0', STR_PAD_LEFT);
         }
@@ -876,7 +854,7 @@ class Net_IPv6
 
         $parts = str_split($bin, "16");
 
-        foreach ( $parts as $v ) {
+        foreach ($parts as $v) {
             $str = base_convert($v, 2, 16);
             $ip .= $str.":";
         }

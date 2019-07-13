@@ -1,47 +1,38 @@
 <?php
 
 /*
-    Copyright (C) 2017 Deciso B.V.
-    Copyright (C) 2004-2007 Scott Ullrich <sullrich@gmail.com>
-    Copyright (C) 2005 Bill Marquette <bill.marquette@gmail.com>
-    Copyright (C) 2006 Peter Allgeyer <allgeyer@web.de>
-    Copyright (C) 2008-2010 Ermal Luçi
-    Copyright (C) 2003-2004 Manuel Kasper <mk@neon1.net>
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are met:
-
-    1. Redistributions of source code must retain the above copyright notice,
-       this list of conditions and the following disclaimer.
-
-    2. Redistributions in binary form must reproduce the above copyright
-       notice, this list of conditions and the following disclaimer in the
-       documentation and/or other materials provided with the distribution.
-
-    THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES,
-    INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
-    AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
-    AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
-    OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-    SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-    INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-    CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-    ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
-*/
+ * Copyright (C) 2017 Deciso B.V.
+ * Copyright (C) 2004-2007 Scott Ullrich <sullrich@gmail.com>
+ * Copyright (C) 2005 Bill Marquette <bill.marquette@gmail.com>
+ * Copyright (C) 2006 Peter Allgeyer <allgeyer@web.de>
+ * Copyright (C) 2008-2010 Ermal Luçi
+ * Copyright (C) 2003-2004 Manuel Kasper <mk@neon1.net>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice,
+ *    this list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES,
+ * INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
+ * AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ * AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+ * OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
 
 require_once('filter.lib.inc');
 
-function fix_rule_label($descr)
-{
-    $descr = str_replace('"', '', $descr);
-    if (strlen($descr) > 63) {
-        return substr($descr, 0, 60) . "...";
-    } else {
-        return $descr;
-    }
-}
 
 function is_bogonsv6_used()
 {
@@ -75,7 +66,7 @@ function filter_rules_sort()
     for ($i = 0; isset($config['filter']['rule'][$i]); $i++) {
         $config['filter']['rule'][$i]['seq'] = $i;
     }
-    usort($config['filter']['rule'], function($a, $b){
+    usort($config['filter']['rule'], function ($a, $b) {
         if (isset($a['floating']) && isset($b['floating'])) {
             return $a['seq'] - $b['seq'];
         } elseif (isset($a['floating'])) {
@@ -106,13 +97,13 @@ function filter_rules_sort()
 
 function filter_pflog_start($verbose = false)
 {
-    if (isvalidpid('/var/run/filterlog.pid')) {
-        return;
-    }
-
     if ($verbose) {
         echo 'Starting PFLOG...';
         flush();
+    }
+
+    if (isvalidpid('/var/run/filterlog.pid')) {
+        killbypid('/var/run/filterlog.pid', 'TERM', true);
     }
 
     mwexec('/usr/local/sbin/filterlog -i pflog0 -p /var/run/filterlog.pid');
@@ -132,34 +123,23 @@ function filter_configure()
      */
     if (!file_exists("/var/run/booting")) {
         configd_run('filter reload');
-        if (!empty($config['hasync']['synchronizetoip'])) {
-            configd_run('filter sync restart');
-        }
     }
 }
 
 function filter_delete_states_for_down_gateways()
 {
-    $GatewaysList = return_gateways_array(false, true) + return_gateway_groups_array();
     $a_gateways = return_gateways_status();
+    $ifdetails = legacy_interfaces_details();
     $any_gateway_down = false;
-
-    if (is_array($GatewaysList)) {
-        foreach ($GatewaysList as $gwname => $gateway) {
-          if (empty($gateway['monitor'])) {
-              continue;
-          } elseif (!is_ipaddr($gateway['monitor'])) {
-              continue;
-          } elseif (strstr($gateway['monitor'], "127.0.0.")) {
-              continue;
-          } elseif (empty($a_gateways[$gateway['monitor']])) {
-              continue;
-          }
-          $gwstatus = &$a_gateways[$gateway['monitor']];
-          if (strstr($gwstatus['status'], "down")) {
-              $any_gateway_down = true;
-              break;
-          }
+    foreach ((new \OPNsense\Routing\Gateways($ifdetails))->gatewaysIndexedByName(false, true) as $gateway) {
+        if (empty($gateway['monitor']) || empty($a_gateways[$gateway['name']])) {
+            continue;
+        } elseif (!is_ipaddr($gateway['monitor']) || strstr($gateway['monitor'], '127.0.0.')) {
+            continue;
+        }
+        if (stristr($a_gateways[$gateway['name']]['status'], 'down')) {
+            $any_gateway_down = true;
+            break;
         }
     }
 
@@ -168,11 +148,15 @@ function filter_delete_states_for_down_gateways()
     }
 }
 
-function filter_configure_sync($verbose = false, $flush_states = false)
+function filter_configure_sync($verbose = false, $flush_states = false, $load_aliases = true)
 {
     global $config;
-
     $sched_kill_states = array(); // kill states for schedules
+
+    if ($verbose) {
+        echo 'Configuring firewall.';
+        flush();
+    }
 
     /* Use filter lock to not allow concurrent filter reloads during this run. */
     $filterlck = lock('filter', LOCK_EX);
@@ -188,7 +172,8 @@ function filter_configure_sync($verbose = false, $flush_states = false)
         foreach ($config['filter']['rule'] as $rule) {
             // calculate a hash for this area so we can track this rule, we should replace this
             // with uuid's on the rules like the new style models do eventually.
-            $rule['md5'] = md5(json_encode($rule));
+            $rule_hash = OPNsense\Firewall\Util::calcRuleHash($rule);
+            $rule['label'] = $rule_hash;
             $sched = '';
             $descr = '';
 
@@ -199,7 +184,7 @@ function filter_configure_sync($verbose = false, $flush_states = false)
                 $descr = ": {$rule['descr']}";
             }
 
-            $rule['label'] = fix_rule_label("USER_RULE{$sched}{$descr}") ;
+            $rule['descr'] = "{$sched}{$descr}";
             if (isset($rule['floating'])) {
                 $prio = 200000;
             } elseif (is_interface_group($rule['interface']) || in_array($rule['interface'], array("l2tp", "pptp", "pppoe", "enc0", "openvpn"))) {
@@ -217,7 +202,7 @@ function filter_configure_sync($verbose = false, $flush_states = false)
                             }
                             /* disable rule, suffix label to mark end of schedule */
                             $rule['disabled'] = true;
-                            $rule['label'] = "[FIN]".$rule['label'];
+                            $rule['descr'] = "[FIN]".$rule['descr'];
                         }
                         break;
                     }
@@ -267,25 +252,18 @@ function filter_configure_sync($verbose = false, $flush_states = false)
     }
 
     // prevent redirection on ports with "lock out" protection
-    $lockoutprts = filter_core_antilockout_ports();
-    if (count($lockoutprts) > 0 &&
-        (!empty($cnfint['lan']['if']) || (count($config['interfaces']) == 1 && !empty($cnfint['wan']['if'])))
-    ) {
+    foreach (filter_core_get_antilockout() as $lockoutif => $lockoutprts) {
         foreach ($lockoutprts as $port) {
             $rule = array(
-                "interface" => !empty($cnfint['lan']['if']) ? "lan" : "wan",
+                'interface' => $lockoutif,
                 "nordr" => true,
                 "protocol" => "tcp",
-                "destination" => array(
-                    "network" => !empty($cnfint['lan']['if']) ? "lanip" : "wanip",
-                    "port" => $port
-                ),
+                'destination' => array('network' => "{$lockoutif}ip", 'port' => $port),
                 "descr" => "Anti lockout, prevent redirects for protected ports to this interface ip"
             );
             $fw->registerForwardRule(300, $rule);
         }
     }
-
 
     if (!empty($config['nat']['npt'])) {
         // register user npt rules
@@ -307,15 +285,25 @@ function filter_configure_sync($verbose = false, $flush_states = false)
         }
     }
 
-    filter_pflog_start();
-
-    if ($verbose) {
-        echo 'Configuring firewall.';
-        flush();
-    }
-
     if (isset($config['system']['gw_switch_default'])) {
-        fixup_default_gateway();
+        // When gateway switching is enabled, we might consider a different default gateway.
+        // although this isn't really the right spot for the feature (it's a monitoring/routing decision),
+        // we keep it here for now (historical reasons).
+        $down_gateways = return_down_gateways();
+        foreach (array("inet", "inet6") as $ipprotocol) {
+            if (!empty($down_gateways)) {
+                log_error(sprintf("Ignore down %s gateways : %s", $ipprotocol, implode(",", $down_gateways)));
+            }
+            $default_gw = $fw->getGateways()->getDefaultGW($down_gateways, $ipprotocol);
+            if ($default_gw !== null) {
+                system_default_route(
+                    $default_gw['gateway'],
+                    $ipprotocol,
+                    $default_gw['if'],
+                    isset($default_gw['fargw'])
+                );
+            }
+        }
     }
 
     $aliases = filter_generate_aliases();
@@ -328,8 +316,8 @@ function filter_configure_sync($verbose = false, $flush_states = false)
     }
 
     $natrules = "\n# NAT Redirects\n";
-    $natrules = "no nat proto carp all\n";
-    $natrules = "no rdr proto carp all\n";
+    $natrules .= "no nat proto carp all\n";
+    $natrules .= "no rdr proto carp all\n";
     $natrules .= $fw->outputNatRules();
 
     if ($verbose) {
@@ -371,7 +359,7 @@ function filter_configure_sync($verbose = false, $flush_states = false)
         $limitrules .= "set ruleset-optimization basic\n";
     }
 
-    if ($config['system']['optimization'] <> "") {
+    if ($config['system']['optimization'] != '') {
         $limitrules .= "set optimization {$config['system']['optimization']}\n";
         if ($config['system']['optimization'] == "conservative") {
             $limitrules .= "set timeout { udp.first 300, udp.single 150, udp.multiple 900 }\n";
@@ -463,12 +451,12 @@ function filter_configure_sync($verbose = false, $flush_states = false)
         /* Brutal ugly hack but required -- PF is stuck, unwedge */
         if (strstr("$rules_error[0]", "busy")) {
             exec('/sbin/pfctl -d; /sbin/pfctl -e; /sbin/pfctl -f /tmp/rules.debug');
-            file_notice('pf_busy', gettext('PF was wedged/busy and has been reset.'), 'pf_busy', '');
+            file_notice(gettext('PF was wedged/busy and has been reset.'));
         } else {
             exec('/sbin/pfctl -o basic -f /tmp/rules.debug.old 2>&1');
         }
 
-        file_notice('filter_load', sprintf(gettext('There were error(s) loading the rules: %s%s'), $rules_error[0], $config_line), 'Filter Reload', '');
+        file_notice(sprintf(gettext('There were error(s) loading the rules: %s%s'), $rules_error[0], $config_line));
         unlock($filterlck);
 
         if ($verbose) {
@@ -496,7 +484,7 @@ function filter_configure_sync($verbose = false, $flush_states = false)
         flush();
     }
 
-    if (!isset($config['system']['kill_states'])) {
+    if (empty($config['system']['kill_states'])) {
         filter_delete_states_for_down_gateways();
     }
 
@@ -514,12 +502,16 @@ function filter_configure_sync($verbose = false, $flush_states = false)
         flush();
     }
 
-    configd_run('template reload OPNsense/Filter');
-    configd_run('filter refresh_aliases', true);
+    if ($load_aliases) {
+        configd_run('template reload OPNsense/Filter');
+        configd_run('filter refresh_aliases', true);
+    }
 
     if ($verbose) {
         echo "done.\n";
     }
+
+    filter_pflog_start($verbose);
 
     unlock($filterlck);
 }
@@ -535,7 +527,7 @@ function filter_generate_scrubing(&$FilterIflist)
         foreach ($config['filter']['scrub']['rule'] as $scrub_rule) {
             if (!isset($scrub_rule['disabled'])) {
                 $scrub_rule_out = "scrub";
-                $scrub_rule_out .= !empty($scrub_rule['direction']) ? " " . $scrub_rule['direction'] : "" ;
+                $scrub_rule_out .= !empty($scrub_rule['direction']) ? " " . $scrub_rule['direction'] : "";
                 $scrub_rule_out .= " on ";
                 $interfaces = array();
                 foreach (explode(',', $scrub_rule['interface']) as $interface) {
@@ -604,12 +596,9 @@ function filter_generate_scrubing(&$FilterIflist)
     return $scrubrules;
 }
 
-
 function filter_generate_aliases()
 {
-    global $config;
-
-    $aliases .= "\n# Lockout tables\n";
+    $aliases = "\n# Lockout tables\n";
     $aliases .= "table <sshlockout> persist\n";
     $aliases .= "table <webConfiguratorlockout> persist\n";
 
@@ -628,14 +617,15 @@ function filter_generate_aliases()
                 # a bit of a hack, but prevents the ruleset from not being able to load if these types are in
                 # the configuration.
                 $aliases .= "{$aliased['name']} = \"{ 0 <> 65535 }\"\n";
-                file_notice('filter_load', sprintf(gettext('URL port aliases types not supported [%s]'), $aliased['name']), 'Filter Reload', '');
+                file_notice(sprintf(gettext('URL port aliases types not supported [%s]'), $aliased['name']));
                 break;
             case "port":
                 $tmp_ports = implode(" ", filter_core_get_port_alias($aliased['name']));
                 $aliases .= "{$aliased['name']} = \"{ {$tmp_ports} }\"\n";
                 break;
             default:
-                $aliases .= "table <{$aliased['name']}> persist\n";
+                $tblopt = (!empty($aliased['counters']) ? 'counters' : '') . " persist ";
+                $aliases .= "table <{$aliased['name']}> {$tblopt} \n";
                 $aliases .= "{$aliased['name']} = \"<{$aliased['name']}>\"\n";
                 break;
         }
@@ -643,7 +633,6 @@ function filter_generate_aliases()
 
     return $aliases;
 }
-
 
 function filter_rules_legacy(&$FilterIflist)
 {
@@ -695,15 +684,17 @@ function filter_rules_legacy(&$FilterIflist)
    </schedule>
  </schedules>
 */
-function filter_get_time_based_rule_status($schedule) {
+function filter_get_time_based_rule_status($schedule)
+{
     /* no schedule? rule should be installed */
-    if (empty($schedule))
-      return true;
+    if (empty($schedule)) {
+        return true;
+    }
     /*
      * iterate through time blocks and determine
      * if the rule should be installed or not.
      */
-    foreach($schedule['timerange'] as $timeday) {
+    foreach ($schedule['timerange'] as $timeday) {
         if (empty($timeday['month'])) {
             $monthstatus = true;
         } else {
@@ -740,7 +731,7 @@ function filter_tdr_day($schedule)
      */
     $date = date("d");
     $defined_days = explode(",", $schedule);
-    foreach($defined_days as $dd) {
+    foreach ($defined_days as $dd) {
         if ($date == $dd) {
             return true;
         }
@@ -775,7 +766,7 @@ function filter_tdr_position($schedule)
         $weekday = 7;
     }
     $schedule_days = explode(",", $schedule);
-    foreach($schedule_days as $day) {
+    foreach ($schedule_days as $day) {
         if ($day == $weekday) {
             return true;
         }
@@ -790,7 +781,7 @@ function filter_tdr_month($schedule)
      */
     $todays_month = date("n");
     $months = explode(",", $schedule);
-    foreach($months as $month) {
+    foreach ($months as $month) {
         if ($month == $todays_month) {
             return true;
         }
@@ -838,7 +829,7 @@ function get_protocols()
     $ipv6_ext = array('IPV6-ROUTE', 'IPV6-FRAG', 'IPV6-OPTS', 'IPV6-NONXT', 'MOBILITY-HEADER');
 
     foreach (explode("\n", file_get_contents('/etc/protocols')) as $line) {
-        if (substr($line,0, 1) != "#") {
+        if (substr($line, 0, 1) != "#") {
             $parts = preg_split('/\s+/', $line);
             if (count($parts) >= 4 && $parts[1] > 0) {
                 $protocol = trim(strtoupper($parts[0]));

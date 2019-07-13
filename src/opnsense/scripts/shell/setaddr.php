@@ -2,7 +2,7 @@
 <?php
 
 /*
- * Copyright (C) 2017 Franco Fichtner <franco@opnsense.org>
+ * Copyright (C) 2017-2019 Franco Fichtner <franco@opnsense.org>
  * Copyright (C) 2003-2004 Manuel Kasper <mk@neon1.net>
  * All rights reserved.
  *
@@ -32,11 +32,8 @@ require_once("config.inc");
 require_once("interfaces.inc");
 require_once("util.inc");
 require_once("filter.inc");
-require_once("rrd.inc");
 require_once("util.inc");
-require_once("services.inc");
 require_once("system.inc");
-require_once('plugins.inc.d/webgui.inc');
 
 function console_prompt_for_yn($prompt_text, $default = '')
 {
@@ -80,7 +77,7 @@ function console_get_interface_from_ppp($realif)
 
 function prompt_for_enable_dhcp_server($version = 4)
 {
-    global $config, $fp, $interface;
+    global $config, $interface;
     if ($interface == "wan") {
         if ($config['interfaces']['lan']) {
             return false;
@@ -135,7 +132,7 @@ function get_interface_config_description($iface)
 $fp = fopen('php://stdin', 'r');
 
 /* build an interface collection */
-$ifdescrs = get_configured_interface_with_descr(false, true);
+$ifdescrs = legacy_config_get_interfaces(array('virtual' => false));
 $count = count($ifdescrs);
 
 /* grab interface that we will operate on, unless there is only one
@@ -143,9 +140,9 @@ $count = count($ifdescrs);
 if ($count > 1) {
     echo "Available interfaces:\n\n";
     $x=1;
-    foreach ($ifdescrs as $iface => $ifdescr) {
+    foreach ($ifdescrs as $iface => $ifcfg) {
         $config_descr = get_interface_config_description($iface);
-        echo "{$x} - {$ifdescr} ({$config_descr})\n";
+        echo "{$x} - {$ifcfg['descr']} ({$config_descr})\n";
         $x++;
     }
     echo "\nEnter the number of the interface to configure: ";
@@ -163,7 +160,7 @@ if ($intnum > $count) {
 }
 
 $index = 1;
-foreach ($ifdescrs as $ifname => $ifdesc) {
+foreach (array_keys($ifdescrs) as $ifname) {
     if ($intnum == $index) {
         $interface = $ifname;
         break;
@@ -206,11 +203,11 @@ function next_unused_gateway_name($interface)
 
 function add_gateway_to_config($interface, $gatewayip, $inet_type, $is_in_subnet)
 {
-    global $config, $fp;
+    global $fp;
 
     $label_IPvX = $inet_type == 'inet6' ? 'IPv6' : 'IPv4';
 
-    $a_gateways =  &config_read_array('gateways', 'gateway_item');
+    $a_gateways = &config_read_array('gateways', 'gateway_item');
     $is_default = true;
     $new_name = '';
 
@@ -362,11 +359,9 @@ function console_configure_ip_address($version)
                         if ($intip == gen_subnet($intip, $intbits)) {
                             echo 'You cannot set network address to an interface';
                             continue 2;
-                            $intbits_ok = false;
                         } elseif ($intip == gen_subnet_max($intip, $intbits)) {
                             echo 'You cannot set broadcast address to an interface';
                             continue 2;
-                            $intbits_ok = false;
                         }
                     }
                 } while (!$intbits_ok);
@@ -561,15 +556,15 @@ system_hosts_generate(true);
 system_resolvconf_generate(true);
 interface_bring_down($interface);
 interface_configure(true, $interface, true);
-setup_gateways_monitor(true);
+plugins_configure('monitor', true);
 filter_configure_sync(true);
 
 if ($restart_dhcpd) {
-    services_dhcpd_configure('all', array(), true);
+    plugins_configure('dhcp', true);
 }
 
 if ($restart_webgui) {
-    webgui_configure_do(true);
+    plugins_configure('webgui', true);
 }
 
 echo "\n";

@@ -1,38 +1,37 @@
 <?php
 
 /*
-    Copyright (C) 2008 Shrew Soft Inc. <mgrooms@shrew.net>
-    Copyright (C) 2007-2008 Scott Ullrich <sullrich@gmail.com>
-    Copyright (C) 2005-2006 Bill Marquette <bill.marquette@gmail.com>
-    Copyright (C) 2006 Paul Taylor <paultaylor@winn-dixie.com>
-    Copyright (C) 2003-2006 Manuel Kasper <mk@neon1.net>
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are met:
-
-    1. Redistributions of source code must retain the above copyright notice,
-       this list of conditions and the following disclaimer.
-
-    2. Redistributions in binary form must reproduce the above copyright
-       notice, this list of conditions and the following disclaimer in the
-       documentation and/or other materials provided with the distribution.
-
-    THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES,
-    INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
-    AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
-    AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
-    OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-    SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-    INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-    CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-    ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
-*/
+ * Copyright (C) 2008 Shrew Soft Inc. <mgrooms@shrew.net>
+ * Copyright (C) 2007-2008 Scott Ullrich <sullrich@gmail.com>
+ * Copyright (C) 2005-2006 Bill Marquette <bill.marquette@gmail.com>
+ * Copyright (C) 2006 Paul Taylor <paultaylor@winn-dixie.com>
+ * Copyright (C) 2003-2006 Manuel Kasper <mk@neon1.net>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice,
+ *    this list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES,
+ * INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
+ * AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ * AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+ * OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
 
 require_once("auth.inc");
 
-// provided via legacy_bindings.inc
 $acl = new OPNsense\Core\ACL();
 $priv_list = $acl->getPrivList();
 
@@ -135,7 +134,6 @@ function session_auth(&$Login_Error)
 
     /* Show login page if they aren't logged in */
     if (empty($_SESSION['Username'])) {
-        session_write_close();
         return false;
     }
 
@@ -200,8 +198,17 @@ set_language();
 /*
  * redirect to first allowed page if requesting a wrong url
  */
-$page =  $_SERVER['REQUEST_URI']  == "/" ? "/index.php" : $_SERVER['REQUEST_URI'];
-if ($_SESSION['Username'] != 'root' && !$acl->isPageAccessible($_SESSION['Username'],$page)) {
+if ($_SERVER['REQUEST_URI']  == '/') {
+    $page = '/index.php';
+} else {
+    /* reconstruct page uri to use actual script location, mimic realpath() behaviour */
+    $page = $_SERVER['SCRIPT_NAME'];
+    $tmp_uri = parse_url($_SERVER['REQUEST_URI']);
+    if (!empty($tmp_uri['query'])) {
+        $page .= '?' . $tmp_uri['query'];
+    }
+}
+if ($_SESSION['Username'] != 'root' && !$acl->isPageAccessible($_SESSION['Username'], $page)) {
     if (session_status() == PHP_SESSION_NONE) {
         session_start();
     }
@@ -244,8 +251,8 @@ function display_error_form($http_code, $desc)
 
     <title><?=$http_code?></title>
 
-    <link href="/ui/themes/<?= $themename ?>/build/css/main.css" rel="stylesheet">
-    <link href="/ui/themes/<?= $themename ?>/build/images/favicon.png" rel="shortcut icon">
+    <link href="<?= cache_safe("/ui/themes/{$themename}/build/css/main.css") ?>" rel="stylesheet">
+    <link href="<?= cache_safe("/ui/themes/{$themename}/build/images/favicon.png") ?>" rel="shortcut icon">
 
     <!--[if lt IE 9]><script src="//cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.2/html5shiv.min.js"></script><![endif]-->
   </head>
@@ -270,8 +277,6 @@ function display_login_form($Login_Error)
 
     $themename = htmlspecialchars(get_current_theme());
 
-    unset($input_errors);
-
     /*
      * Check against locally configured IP addresses, which will catch when
      * someone port-forwards WebGUI access from WAN to an internal IP on the
@@ -294,13 +299,11 @@ function display_login_form($Login_Error)
     }
     setcookie("cookie_test", time() + 3600 ,  time() + 3600, '/', null, $config['system']['webgui']['protocol'] == "https", true);
     $have_cookies = isset($_COOKIE["cookie_test"]);
-
 ?><!doctype html>
 <!--[if IE 8 ]><html lang="en" class="ie ie8 lte9 lte8 no-js"><![endif]-->
 <!--[if IE 9 ]><html lang="en" class="ie ie9 lte9 no-js"><![endif]-->
 <!--[if (gt IE 9)|!(IE)]><!--><html lang="en" class="no-js"><!--<![endif]-->
   <head>
-
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
 
@@ -312,17 +315,15 @@ function display_login_form($Login_Error)
 
     <title><?=gettext("Login"); ?></title>
 
-    <link href="/ui/themes/<?= $themename ?>/build/css/main.css" rel="stylesheet">
-    <link href="/ui/themes/<?= $themename ?>/build/images/favicon.png" rel="shortcut icon">
+    <link href="<?= cache_safe("/ui/themes/{$themename}/build/css/main.css") ?>" rel="stylesheet">
+    <link href="<?= cache_safe("/ui/themes/{$themename}/build/images/favicon.png") ?>" rel="shortcut icon">
 
     <script src="/ui/js/jquery-3.2.1.min.js"></script>
     <script src="/ui/js/jquery-migrate-3.0.1.min.js"></script>
 
-<?php
-    if (file_exists("/usr/local/opnsense/www/themes/".$themename."/build/js/theme.js")):?>
-    <script src="/ui/themes/<?=$themename?>/build/js/theme.js"></script>
-<?php
-    endif;?>
+<?php if (file_exists("/usr/local/opnsense/www/themes/{$themename}/build/js/theme.js")): ?>
+    <script src="<?= cache_safe("/ui/themes/{$themename}/build/js/theme.js") ?>"></script>
+<?php endif ?>
 
     <!--[if lt IE 9]><script src="//cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.2/html5shiv.min.js"></script><![endif]-->
 
@@ -339,7 +340,11 @@ function display_login_form($Login_Error)
     <main class="login-modal-container">
       <header class="login-modal-head" style="height:50px;">
         <div class="navbar-brand">
-          <img src="/ui/themes/<?=$themename;?>/build/images/default-logo.<?=file_exists("/usr/local/opnsense/www/themes/{$themename}/build/images/default-logo.svg") ? "svg" : "png";?>" height="30" alt="logo" />
+<?php if (file_exists("/usr/local/opnsense/www/themes/{$themename}/build/images/default-logo.svg")): ?>
+          <img src="<?= cache_safe("/ui/themes/{$themename}/build/images/default-logo.svg") ?>" height="30" alt="logo" />
+<?php else: ?>
+          <img src="<?= cache_safe("/ui/themes/{$themename}/build/images/default-logo.png") ?>" height="30" alt="logo" />
+<?php endif ?>
         </div>
       </header>
 
@@ -373,8 +378,8 @@ function display_login_form($Login_Error)
 
       </main>
       <div class="login-foot text-center">
-        <a target="_blank" href="<?=$g['product_website']?>" class="redlnk"><?=$g['product_name']?></a> (c) <?=$g['product_copyright_years']?>
-        <a href="<?=$g['product_copyright_url']?>" class="tblnk"><?=$g['product_copyright_owner']?></a>
+        <a target="_blank" href="<?=$g['product_website']?>"><?=$g['product_name']?></a> (c) <?=$g['product_copyright_years']?>
+        <a target="_blank" href="<?=$g['product_copyright_url']?>"><?=$g['product_copyright_owner']?></a>
       </div>
 
     </div>

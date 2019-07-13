@@ -1,54 +1,63 @@
 <?php
 
 /*
-    Copyright (C) 2016 Deciso B.V.
-    Copyright (C) 2008 Shrew Soft Inc. <mgrooms@shrew.net>
-    Copyright (C) 2008 Ermal Luçi
-    Copyright (C) 2004-2007 Scott Ullrich <sullrich@gmail.com>
-    Copyright (C) 2003-2004 Manuel Kasper <mk@neon1.net>
-    All rights reserved.
+ * Copyright (C) 2016 Deciso B.V.
+ * Copyright (C) 2008 Shrew Soft Inc. <mgrooms@shrew.net>
+ * Copyright (C) 2008 Ermal Luçi
+ * Copyright (C) 2004-2007 Scott Ullrich <sullrich@gmail.com>
+ * Copyright (C) 2003-2004 Manuel Kasper <mk@neon1.net>
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice,
+ *    this list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES,
+ * INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
+ * AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ * AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+ * OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
 
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions are met:
+const IPSEC_LOG_SUBSYSTEMS = [
+    'asn' => 'Low-level encoding/decoding (ASN.1, X.509 etc.)',
+    'cfg' => 'Configuration management and plugins',
+    'chd' => 'CHILD_SA/IPsec SA',
+    'dmn' => 'Main daemon setup/cleanup/signal handling',
+    'enc' => 'Packet encoding/decoding encryption/decryption operations',
+    'esp' => 'libipsec library messages',
+    'ike' => 'IKE_SA/ISAKMP SA',
+    'imc' => 'Integrity Measurement Collector',
+    'imv' => 'Integrity Measurement Verifier',
+    'job' => 'Jobs queuing/processing and thread pool management',
+    'knl' => 'IPsec/Networking kernel interface',
+    'lib' => 'libstrongwan library messages',
+    'mgr' => 'IKE_SA manager, handling synchronization for IKE_SA access',
+    'net' => 'IKE network communication',
+    'pts' => 'Platform Trust Service',
+    'tls' => 'libtls library messages',
+    'tnc' => 'Trusted Network Connect',
+];
 
-    1. Redistributions of source code must retain the above copyright notice,
-       this list of conditions and the following disclaimer.
-
-    2. Redistributions in binary form must reproduce the above copyright
-       notice, this list of conditions and the following disclaimer in the
-       documentation and/or other materials provided with the distribution.
-
-    THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES,
-    INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
-    AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
-    AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
-    OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-    SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-    INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-    CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-    ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
-*/
-
-$ipsec_loglevels = array(
-    "asn" => "Low-level encoding/decoding (ASN.1, X.509 etc.)",
-    "cfg" => "Configuration management and plugins",
-    "chd" => "CHILD_SA/IPsec SA",
-    "dmn" => "Main daemon setup/cleanup/signal handling",
-    "enc" => "Packet encoding/decoding encryption/decryption operations",
-    "esp" => "libipsec library messages",
-    "ike" => "IKE_SA/ISAKMP SA",
-    "imc" => "Integrity Measurement Collector",
-    "imv" => "Integrity Measurement Verifier",
-    "job" => "Jobs queuing/processing and thread pool management",
-    "knl" => "IPsec/Networking kernel interface",
-    "lib" => "libstrongwan library messages",
-    "mgr" => "IKE_SA manager, handling synchronization for IKE_SA access",
-    "net" => "IKE network communication",
-    "pts" => "Platform Trust Service",
-    "tls" => "libtls library messages",
-    "tnc" => "Trusted Network Connect"
-);
+const IPSEC_LOG_LEVELS = [
+    -1 => 'Silent',
+    0 => 'Basic',
+    1 => 'Audit',
+    2 => 'Control',
+    3 => 'Raw',
+    4 => 'Highest',
+];
 
 $p1_ealgos = array(
     'aes' => array( 'name' => 'AES', 'keysel' => array( 'lo' => 128, 'hi' => 256, 'step' => 64 ), 'iketype' => null ),
@@ -104,6 +113,8 @@ $p2_protos = array(
 function ipsec_configure()
 {
     return array(
+        'ipsec' => array('ipsec_configure_do:2'),
+        'ipsec_prepare' => array('ipsec_configure_vti'),
         'vpn' => array('ipsec_configure_do:2'),
     );
 }
@@ -148,39 +159,33 @@ function ipsec_interfaces()
 
     $interfaces = array();
 
-    if (isset($config['ipsec']['phase1']) && isset($config['ipsec']['phase2'])) {
+    if (isset($config['ipsec']['phase1'])) {
         foreach ($config['ipsec']['phase1'] as $ph1ent) {
-            if (!empty($ph1ent['disabled'])) {
-                continue;
-            }
-
-            foreach ($config['ipsec']['phase2'] as $ph2ent) {
-                if (!empty($ph2ent['disabled']) || $ph1ent['ikeid'] != $ph2ent['ikeid']) {
-                    continue;
-                }
-
-                if ((!empty($ph2ent['mobile']) && empty($config['ipsec']['client']['enable'])) ||
-                    empty($config['ipsec']['enable'])) {
-                    continue;
-                }
-
+            if (empty($ph1ent['disabled'])) {
                 $oic = array('enable' => true);
                 $oic['if'] = 'enc0';
                 $oic['descr'] = 'IPsec';
                 $oic['type'] = 'none';
                 $oic['virtual'] = true;
-                $oic['networks'] = array();
                 $interfaces['enc0'] = $oic;
-
-                break 2;
+                break;
             }
+        }
+        // automatically register VTI's in the interfaces list
+        foreach (ipsec_get_configured_vtis() as $intf => $details) {
+            $interfaces[$intf] = [
+                'enable' => true,
+                'descr' => $details['descr'],
+                'if' => $intf,
+                'type' => 'none',
+            ];
         }
     }
 
     return $interfaces;
 }
 
-function ipsec_firewall($fw)
+function ipsec_firewall(\OPNsense\Firewall\Plugin $fw)
 {
     global $config;
 
@@ -226,7 +231,8 @@ function ipsec_firewall($fw)
                                       "quick" => false,
                                       "type" => "pass",
                                       "statetype" => "keep",
-                                      "label" => "IPsec: " . (!empty($ph1ent['descr']) ? $ph1ent['descr'] : $rgip)
+                                      "#ref" => "vpn_ipsec_settings.php#disablevpnrules",
+                                      "descr" => "IPsec: " . (!empty($ph1ent['descr']) ? $ph1ent['descr'] : $rgip)
                                     );
 
                     // find gateway
@@ -311,17 +317,7 @@ function ipsec_get_phase1_src(&$ph1ent)
         if ($ph1ent['interface'] == 'any') {
             return '%any';
         } elseif (!is_ipaddr($ph1ent['interface'])) {
-            if (strpos($ph1ent['interface'], '_vip') !== false) {
-                // if this is a vip, set the interface to $ph1ent['interface']
-                $if = $ph1ent['interface'];
-            } else {
-                // not a vip, check failover interface
-                if ($ph1ent['protocol'] == "inet6") {
-                    $if = get_failover_interface($ph1ent['interface'], "inet6");
-                } else {
-                    $if = get_failover_interface($ph1ent['interface']);
-                }
-            }
+            $if = $ph1ent['interface'];
         } else {
             // interface is an ip address, return
             return $ph1ent['interface'];
@@ -364,17 +360,10 @@ function ipsec_idinfo_to_cidr(&$idinfo, $addrbits = false, $mode = '')
             if (empty($mode) && !empty($idinfo['mode'])) {
                 $mode = $idinfo['mode'];
             }
-
-            if ($mode == "tunnel6") {
-                $address = get_interface_ipv6($idinfo['type']);
-                $netbits = get_interface_subnetv6($idinfo['type']);
-                $address = gen_subnetv6($address, $netbits);
-                return "{$address}/{$netbits}";
+            if ($mode == 'tunnel6') {
+                return find_interface_networkv6(get_real_interface($idinfo['type']), 'inet6');
             } else {
-                $address = get_interface_ip($idinfo['type']);
-                $netbits = get_interface_subnet($idinfo['type']);
-                $address = gen_subnet($address, $netbits);
-                return "{$address}/{$netbits}";
+                return find_interface_network(get_real_interface($idinfo['type']));
             }
             break; /* NOTREACHED */
     }
@@ -433,6 +422,7 @@ function ipsec_dump_spd()
     $fd = @popen("/sbin/setkey -DP", "r");
     $spd = array();
     if ($fd) {
+        $i = 0;
         while (!feof($fd)) {
             $line = chop(fgets($fd));
             if (!$line) {
@@ -487,6 +477,8 @@ function ipsec_dump_sad()
     $fd = @popen("/sbin/setkey -D", "r");
     $sad = array();
     if ($fd) {
+        $cursa = null;
+        $i = 0;
         while (!feof($fd)) {
             $line = chop(fgets($fd));
             if (!$line || $line[0] == " ") {
@@ -577,6 +569,7 @@ function ipsec_resolve($hostname)
 function ipsec_find_id(&$ph1ent, $side = 'local')
 {
     $id_data = null;
+    $id_type = null;
     if ($side == "local") {
         $id_type = $ph1ent['myid_type'];
         $id_data = isset($ph1ent['myid_data']) ? $ph1ent['myid_data'] : null;
@@ -607,64 +600,34 @@ function ipsec_find_id(&$ph1ent, $side = 'local')
 }
 
 /* include all configuration functions */
-function ipsec_convert_to_modp($index)
+function ipsec_convert_to_modp($index): string
 {
-    $convertion = "";
-    switch ($index) {
-        case '1':
-            $convertion = "modp768";
-            break;
-        case '2':
-            $convertion = "modp1024";
-            break;
-        case '5':
-            $convertion = "modp1536";
-            break;
-        case '14':
-            $convertion = "modp2048";
-            break;
-        case '15':
-            $convertion = "modp3072";
-            break;
-        case '16':
-            $convertion = "modp4096";
-            break;
-        case '17':
-            $convertion = "modp6144";
-            break;
-        case '18':
-            $convertion = "modp8192";
-            break;
-        case '19':
-            $convertion = "ecp256";
-            break;
-        case '20':
-            $convertion = "ecp384";
-            break;
-        case '21':
-            $convertion = "ecp521";
-            break;
-        case '22':
-            $convertion = "modp1024s160";
-            break;
-        case '23':
-            $convertion = "modp2048s224";
-            break;
-        case '24':
-            $convertion = "modp2048s256";
-            break;
-        case '28':
-            $convertion = "ecp256bp";
-            break;
-        case '29':
-            $convertion = "ecp384bp";
-            break;
-        case '30':
-            $convertion = "ecp512bp";
-            break;
+    $map = [
+        1 => 'modp768',
+        2 => 'modp1024',
+        5 => 'modp1536',
+        14 => 'modp2048',
+        15 => 'modp3072',
+        16 => 'modp4096',
+        17 => 'modp6144',
+        18 => 'modp8192',
+        19 => 'ecp256',
+        20 => 'ecp384',
+        21 => 'ecp521',
+        22 => 'modp1024s160',
+        23 => 'modp2048s224',
+        24 => 'modp2048s256',
+        28 => 'ecp256bp',
+        29 => 'ecp384bp',
+        30 => 'ecp512bp',
+        31 => 'curve25519',
+    ];
+
+    if (!array_key_exists($index, $map)) {
+        return '';
     }
 
-    return $convertion;
+    return $map[$index];
 }
 
 /**
@@ -679,6 +642,7 @@ function ipsec_configure_spd()
     // cleanup, collect previous manual added spd entries (stash in spd_entries) for removal.
     exec('/sbin/setkey -PD', $lines);
     $line_count = 0;
+    $src = $dst = $direction = '';
     foreach ($lines as $line) {
         if ($line[0] != "\t") {
             $tmp = explode(' ', $line);
@@ -705,6 +669,18 @@ function ipsec_configure_spd()
                 if (!isset($ph2ent['disabled']) && $ph1ent['ikeid'] == $ph2ent['ikeid'] && !empty($ph2ent['spd'])) {
                     $myid_data = ipsec_find_id($ph1ent, "local");
                     $peerid_spec = ipsec_find_id($ph1ent, "peer");
+                    if (!is_ipaddr($peerid_spec)) {
+                        if (is_ipaddr($ph1ent['remote-gateway'])) {
+                            $peerid_spec = $ph1ent['remote-gateway'];
+                        } else {
+                            log_error(sprintf(
+                                "spdadd: unable to match remote network on %s or %s [skipped]",
+                                $peerid_spec,
+                                $ph1ent['remote-gateway']
+                            ));
+                            continue;
+                        }
+                    }
                     foreach (explode(',', $ph2ent['spd']) as $local_net) {
                         $proto = $ph2ent['mode'] == "tunnel" ? "4" : "6";
                         $remote_net = ipsec_idinfo_to_cidr($ph2ent['remoteid'], false, $ph2ent['mode']);
@@ -731,7 +707,7 @@ function ipsec_configure_spd()
 
 function ipsec_configure_do($verbose = false, $interface = '')
 {
-    global $config, $p2_ealgos, $ipsec_loglevels;
+    global $config, $p2_ealgos;
 
     if (!empty($interface)) {
          $active = false;
@@ -746,6 +722,8 @@ function ipsec_configure_do($verbose = false, $interface = '')
             return;
         }
     }
+    // configure VTI if needed
+    ipsec_configure_vti();
 
     /* get the automatic ping_hosts.sh ready */
     @unlink('/var/db/ipsecpinghosts');
@@ -758,7 +736,6 @@ function ipsec_configure_do($verbose = false, $interface = '')
         set_single_sysctl("net.key.preferred_oldsa", "0");
     }
 
-    $syscfg = $config['system'];
     $ipseccfg = $config['ipsec'];
     $a_phase1 = isset($config['ipsec']['phase1']) ? $config['ipsec']['phase1'] : array();
     $a_phase2 = isset($config['ipsec']['phase2']) ? $config['ipsec']['phase2'] : array();
@@ -801,7 +778,6 @@ function ipsec_configure_do($verbose = false, $interface = '')
         }
 
         /* resolve all local, peer addresses and setup pings */
-        $rgmap = array();
         $ipsecpinghosts = "";
 
         /* step through each phase1 entry */
@@ -813,8 +789,6 @@ function ipsec_configure_do($verbose = false, $interface = '')
             if ($ph1ent['mode'] == "aggressive" && in_array($ph1ent['authentication_method'], array("pre_shared_key", "xauth_psk_server"))) {
                 $aggressive_psk = true;
             }
-            $ep = ipsec_get_phase1_src($ph1ent);
-
             if (isset($ph1ent['mobile'])) {
                 continue;
             }
@@ -832,13 +806,13 @@ function ipsec_configure_do($verbose = false, $interface = '')
                 /* add an ipsec pinghosts entry */
                 if ($ph2ent['pinghost']) {
                     if (!isset($iflist) || !is_array($iflist)) {
-                        $iflist = get_configured_interface_list();
+                        $iflist = get_configured_interface_with_descr();
                     }
                     $viplist = get_configured_vips_list();
                     $srcip = null;
                     $local_subnet = ipsec_idinfo_to_cidr($ph2ent['localid'], true, $ph2ent['mode']);
                     if (is_ipaddrv6($ph2ent['pinghost'])) {
-                        foreach ($iflist as $ifent => $ifname) {
+                        foreach (array_keys($iflist) as $ifent) {
                             $interface_ip = get_interface_ipv6($ifent);
                             if (!is_ipaddrv6($interface_ip)) {
                                 continue;
@@ -849,7 +823,7 @@ function ipsec_configure_do($verbose = false, $interface = '')
                             }
                         }
                     } else {
-                        foreach ($iflist as $ifent => $ifname) {
+                        foreach (array_keys($iflist) as $ifent) {
                             $interface_ip = get_interface_ip($ifent);
                             if (!is_ipaddrv4($interface_ip)) {
                                 continue;
@@ -883,37 +857,47 @@ function ipsec_configure_do($verbose = false, $interface = '')
         }
         @file_put_contents('/var/db/ipsecpinghosts', $ipsecpinghosts);
 
-        $cnf_add_to_charon_section = "";
-        $cnf_add_to_charon_section .= $aggressive_psk ? "\ti_dont_care_about_security_and_use_aggressive_mode_psk=yes\n":"";
-        $cnf_add_to_charon_section .= !empty($config['ipsec']['auto_routes_disable']) ? "\tinstall_routes = no\n" : "";
+        $strongswanTree = [
+            '# Automatically generated, please do not modify' => '',
+            'starter' => [
+                'load_warning' => 'no'
+            ],
+            'charon' => [
+                'threads' => 16,
+                'ikesa_table_size' => 32,
+                'ikesa_table_segments' => 4,
+                'init_limit_half_open' => 1000,
+                'ignore_acquire_ts' => 'yes',
+                'syslog' => [
+                    'identifier' => 'charon',
+                    'daemon' => [
+                        'ike_name' => 'yes'
+                    ]
+                ]
+            ]
+        ];
+
+        if ($aggressive_psk) {
+            $strongswanTree['charon']['i_dont_care_about_security_and_use_aggressive_mode_psk'] = 'yes';
+        }
+        if (!empty($config['ipsec']['auto_routes_disable'])) {
+            $strongswanTree['charon']['install_routes'] = 'no';
+        }
         if (isset($a_client['enable']) && isset($a_client['net_list'])) {
-            $cnf_add_to_charon_section .= "\tcisco_unity = yes\n";
+            $strongswanTree['charon']['cisco_unity'] = 'yes';
         }
 
-        $strongswan = <<<EOD
-
-#Automatically generated please do not modify
-starter {
-    load_warning = no
-}
-
-charon {
-    # number of worker threads in charon
-    threads = 16
-    ikesa_table_size = 32
-    ikesa_table_segments = 4
-    init_limit_half_open = 1000
-    ignore_acquire_ts = yes
-    syslog {
-        daemon {
-            ike_name = yes
+        // Debugging configuration
+        // lkey is the log key, which is a three-letter abbreviation of the subsystem to log, e.g. `ike`.
+        // The value will be a number between -1 (silent) and 4 (highest verbosity).
+        foreach (array_keys(IPSEC_LOG_SUBSYSTEMS) as $lkey) {
+            if (isset($config['ipsec']["ipsec_{$lkey}"]) && is_numeric($config['ipsec']["ipsec_{$lkey}"]) &&
+                array_key_exists(intval($config['ipsec']["ipsec_{$lkey}"]), IPSEC_LOG_LEVELS)) {
+                $strongswanTree['charon']['syslog']['daemon'][$lkey] = $config['ipsec']["ipsec_{$lkey}"];
+            }
         }
-    }
-{$cnf_add_to_charon_section}
 
-EOD;
-
-        $strongswan .= "\tplugins {\n";
+        $strongswanTree['charon']['plugins'] = [];
 
         if (isset($a_client['enable'])) {
             $net_list = array();
@@ -925,11 +909,11 @@ EOD;
                 }
             }
 
-            $strongswan .= "\t\tattr {\n";
+            $strongswanTree['charon']['plugins']['attr'] = [];
             if (!empty($net_list)) {
                 $net_list_str = implode(",", $net_list);
-                $strongswan .= "\t\t\tsubnet = {$net_list_str}\n";
-                $strongswan .= "\t\t\tsplit-include = {$net_list_str}\n";
+                $strongswanTree['charon']['plugins']['attr']['subnet'] = $net_list_str;
+                $strongswanTree['charon']['plugins']['attr']['split-include'] = $net_list_str;
             }
             $cfgservers = array();
             foreach (array('dns_server1', 'dns_server2', 'dns_server3', 'dns_server4') as $dns_server) {
@@ -938,7 +922,7 @@ EOD;
                 }
             }
             if (!empty($cfgservers)) {
-                $strongswan .= "\t\t\tdns = " . implode(",", $cfgservers) . "\n";
+                $strongswanTree['charon']['plugins']['attr']['dns'] = implode(",", $cfgservers);
             }
             unset($cfgservers);
             $cfgservers = array();
@@ -949,56 +933,66 @@ EOD;
                 $cfgservers[] = $a_client['wins_server2'];
             }
             if (!empty($cfgservers)) {
-                $strongswan .= "\t\t\tnbns = " . implode(",", $cfgservers) . "\n";
+                $strongswanTree['charon']['plugins']['attr']['nbns'] = implode(",", $cfgservers);
             }
             unset($cfgservers);
 
             if (!empty($a_client['dns_domain'])) {
-                $strongswan .= "\t\t\t# Search domain and default domain\n";
-                $strongswan .= "\t\t\t28674 = {$a_client['dns_domain']}\n";
-                if (empty($a_client['dns_split'])) {
-                    $strongswan .= "\t\t\t28675 = {$a_client['dns_domain']}";
+                $strongswanTree['charon']['plugins']['attr']['# Search domain and default domain'] = '';
+                $strongswanTree['charon']['plugins']['attr']['28674'] = $a_client['dns_domain'];
+            }
+
+            /*
+             * 28675 --> UNITY_SPLITDNS_NAME
+             * 25 --> INTERNAL_DNS_DOMAIN
+             */
+            foreach (array("28675", "25") as $attr) {
+                if (!empty($a_client['dns_split'])) {
+                    $strongswanTree['charon']['plugins']['attr'][$attr] = $a_client['dns_split'];
+                } elseif (!empty($a_client['dns_domain'])) {
+                    $strongswanTree['charon']['plugins']['attr'][$attr] = $a_client['dns_domain'];
                 }
-                $strongswan .= "\n";
             }
 
             if (!empty($a_client['dns_split'])) {
-                $strongswan .= "\t\t\t28675 = {$a_client['dns_split']}\n";
+                $strongswanTree['charon']['plugins']['attr']['28675'] = $a_client['dns_split'];
             }
 
             if (!empty($a_client['login_banner'])) {
-                $strongswan .= "\t\t\t28672 = {$a_client['login_banner']}\n";
+                /* defang login banner, it may be multiple lines and we should not let it escape */
+                $strongswanTree['charon']['plugins']['attr']['28672'] = '"' . str_replace(['\\', '"'], '', $a_client['login_banner']) . '"';
             }
 
             if (isset($a_client['save_passwd'])) {
-                $strongswan .= "\t\t\t28673 = 1\n";
+                $strongswanTree['charon']['plugins']['attr']['28673'] = 1;
             }
 
             if (!empty($a_client['pfs_group'])) {
-                $strongswan .= "\t\t\t28679 = {$a_client['pfs_group']}\n";
+                $strongswanTree['charon']['plugins']['attr']['28679'] = $a_client['pfs_group'];
             }
-            $strongswan .= "\t\t}\n";
 
             $disable_xauth = false;
             foreach ($a_phase1 as $ph1ent) {
                 if (!isset($ph1ent['disabled']) && isset($ph1ent['mobile'])) {
                     if ($ph1ent['authentication_method'] == "eap-radius") {
                         $disable_xauth = true; // disable Xauth when radius is used.
-                        $strongswan .= "\t\teap-radius {\n";
-                        $radius_servers = "";
+                        $strongswanTree['charon']['plugins']['eap-radius'] = [];
+                        $strongswanTree['charon']['plugins']['eap-radius']['servers'] = [];
                         $radius_server_num = 1;
                         $radius_accounting_enabled = false;
                         foreach (auth_get_authserver_list() as $auth_server) {
                             if (in_array($auth_server['name'], explode(',', $ph1ent['authservers']))) {
-                                $radius_servers .= "\t\t\t\tserver" . $radius_server_num . " {\n";
-                                $radius_servers .= "\t\t\t\t\taddress = " . $auth_server['host'] . "\n";
-                                $radius_servers .= "\t\t\t\t\tsecret = \"" . $auth_server['radius_secret'] . "\"\n";
-                                $radius_servers .= "\t\t\t\t\tauth_port = " . $auth_server['radius_auth_port'] . "\n";
+                                $server = [
+                                    'address' => $auth_server['host'],
+                                    'secret' => '"' . $auth_server['radius_secret'] . '"',
+                                    'auth_port' => $auth_server['radius_auth_port'],
+                                ];
 
                                 if (!empty($auth_server['radius_acct_port'])) {
-                                    $radius_servers .= "\t\t\t\t\tacct_port = " . $auth_server['radius_acct_port'] . "\n";
+                                    $server['acct_port'] = $auth_server['radius_acct_port'];
                                 }
-                                $radius_servers .= "\t\t\t\t}\n";
+                                $strongswanTree['charon']['plugins']['eap-radius']['servers']['server' . $radius_server_num] = $server;
+
                                 if (!empty($auth_server['radius_acct_port'])) {
                                     $radius_accounting_enabled = true;
                                 }
@@ -1006,25 +1000,23 @@ EOD;
                             }
                         }
                         if ($radius_accounting_enabled) {
-                            $strongswan .= "\t\t\taccounting = yes\n";
+                            $strongswanTree['charon']['plugins']['eap-radius']['accounting'] = 'yes';
                         }
-                        $strongswan .= "\t\t\tservers {\n";
-                        $strongswan .= $radius_servers;
-                        $strongswan .= "\t\t\t}\n";
-                        $strongswan .= "\t\t}\n";
                         break; // there can only be one mobile phase1, exit loop
                     }
                 }
             }
             if (isset($a_client['enable']) && !$disable_xauth) {
-                $strongswan .= "\t\txauth-generic {\n";
-                $strongswan .= "\t\t\tscript = /usr/local/etc/inc/plugins.inc.d/ipsec/auth-user.php\n";
-                $strongswan .= "\t\t\tauthcfg = unused\n";
-                $strongswan .= "\t\t}\n";
+                $strongswanTree['charon']['plugins']['xauth-pam'] = [
+                    'pam_service' => 'ipsec',
+                    'session' => 'no',
+                    'trim_email' => 'yes'
+                ];
             }
         }
 
-        $strongswan .= "\t}\n}\n";
+        $strongswan = generate_strongswan_conf($strongswanTree);
+        $strongswan .= "\ninclude strongswan.opnsense.d/*.conf\n";
         @file_put_contents("/usr/local/etc/strongswan.conf", $strongswan);
         unset($strongswan);
 
@@ -1051,7 +1043,7 @@ EOD;
         }
 
         $pskconf = "";
-
+        $is_route_base = false;
         foreach ($a_phase1 as $ph1ent) {
             if (isset($ph1ent['disabled'])) {
                 continue;
@@ -1118,6 +1110,7 @@ EOD;
             unset($key);
         }
 
+        $pskconf .= "\ninclude ipsec.secrets.opnsense.d/*.secrets\n";
         @file_put_contents("/usr/local/etc/ipsec.secrets", $pskconf);
         chmod("/usr/local/etc/ipsec.secrets", 0600);
         unset($pskconf);
@@ -1127,17 +1120,6 @@ EOD;
         if (count($a_phase1)) {
             $ipsecconf .= "# This file is automatically generated. Do not edit\n";
             $ipsecconf .= "config setup\n\tuniqueids = yes\n";
-            // parse debug tags
-            $cfg_loglevels = array();
-            if (isset($ipsec_loglevels)) {
-                foreach ($ipsec_loglevels as $lkey => $ldescr) {
-                    if (isset($config['ipsec']["ipsec_{$lkey}"]) && is_numeric($config['ipsec']["ipsec_{$lkey}"]) &&
-                      intval($config['ipsec']["ipsec_{$lkey}"]) >= -1 && intval($config['ipsec']["ipsec_{$lkey}"]) <= 4) {
-                          $cfg_loglevels[] = $lkey . " " . $config['ipsec']["ipsec_{$lkey}"];
-                    }
-                }
-            }
-            $ipsecconf .= "\tcharondebug=\"" .implode(',', $cfg_loglevels) . "\"\n";
 
             if (!empty($config['ipsec']['passthrough_networks'])) {
                 $ipsecconf .= "\nconn pass\n";
@@ -1149,11 +1131,14 @@ EOD;
             }
 
             foreach ($a_phase1 as $ph1ent) {
+                $tunneltype = "";
+                $mobike = "";
+
                 if (isset($ph1ent['disabled'])) {
                     continue;
                 }
-                $conn_params = "";
                 $aggressive = $ph1ent['mode'] == "aggressive" ? "yes" : "no";
+                $installpolicy = empty($ph1ent['noinstallpolicy']) ? "yes" : "no";
 
                 $ep = ipsec_get_phase1_src($ph1ent);
                 if (empty($ep)) {
@@ -1166,16 +1151,22 @@ EOD;
                     $mobike = !empty($ph1ent['mobike']) ? "mobike = no" : "mobike = yes";
                 }
 
-                if (isset($ph1ent['mobile'])) {
-                    $right_spec = "%any";
-                } else {
+                $right_spec = '%any';
+                $right_any = '';
+                if (!isset($ph1ent['mobile'])) {
                     $right_spec = $ph1ent['remote-gateway'];
+
+                    if ($ph1ent['rightallowany']) {
+                        $right_any = 'rightallowany = yes';
+                    }
                 }
 
                 if (!empty($ph1ent['auto'])) {
                     $conn_auto = $ph1ent['auto'];
                 } elseif (isset($ph1ent['mobile'])) {
                     $conn_auto = 'add';
+                } elseif (!empty($config['ipsec']['auto_routes_disable'])) {
+                    $conn_auto = 'start';
                 } else {
                     $conn_auto = 'route';
                 }
@@ -1184,17 +1175,25 @@ EOD;
                 $peerid_spec = ipsec_find_id($ph1ent, "peer");
 
                 if (!empty($ph1ent['encryption-algorithm']['name']) && !empty($ph1ent['hash-algorithm'])) {
-                    $ealg_id = $ph1ent['encryption-algorithm']['name'];
-                    if (isset($ph1ent['encryption-algorithm']['keylen'])) {
-                        $ealgosp1 = "ike = {$ealg_id}{$ph1ent['encryption-algorithm']['keylen']}-{$ph1ent['hash-algorithm']}";
-                    } else {
-                        $ealgosp1 = "ike = {$ealg_id}-{$ph1ent['hash-algorithm']}";
+                    $list = array();
+                    foreach (explode(',', $ph1ent['hash-algorithm']) as $halgo) {
+                        $entry = "{$ph1ent['encryption-algorithm']['name']}";
+                        if (isset($ph1ent['encryption-algorithm']['keylen'])) {
+                             $entry .= "{$ph1ent['encryption-algorithm']['keylen']}";
+                        }
+                        $entry .= "-{$halgo}";
+                        if (!empty($ph1ent['dhgroup'])) {
+                            foreach (explode(',', $ph1ent['dhgroup']) as $dhgrp) {
+                                $entryd = $entry;
+                                $modp = ipsec_convert_to_modp($dhgrp);
+                                if (!empty($modp)) {
+                                    $entryd .= "-{$modp}";
+                                }
+                                $list[] = $entryd;
+                            }
+                        }
                     }
-                    $modp = ipsec_convert_to_modp($ph1ent['dhgroup']);
-                    if (!empty($modp)) {
-                        $ealgosp1 .= "-{$modp}";
-                    }
-                    $ealgosp1 .= "!";
+                    $ealgosp1 = 'ike = ' . implode(',', array_reverse($list)) . '!';
                 }
 
                 if (!empty($ph1ent['dpd_delay']) && !empty($ph1ent['dpd_maxfail'])) {
@@ -1248,11 +1247,11 @@ EOD;
                         break;
                     case 'xauth_rsa_server':
                         $authentication = "leftauth = pubkey\n\trightauth = pubkey";
-                        $authentication .= "\n\trightauth2 = xauth-generic";
+                        $authentication .= "\n\trightauth2 = xauth-pam";
                         break;
                     case 'xauth_psk_server':
                         $authentication = "leftauth = psk\n\trightauth = psk";
-                        $authentication .= "\n\trightauth2 = xauth-generic";
+                        $authentication .= "\n\trightauth2 = xauth-pam";
                         break;
                     case 'pre_shared_key':
                         $authentication = "leftauth = psk\n\trightauth = psk";
@@ -1261,8 +1260,7 @@ EOD;
                         $authentication = "leftauth = pubkey\n\trightauth = pubkey";
                         break;
                     case 'hybrid_rsa_server':
-                        $authentication = "leftauth = xauth-generic\n\trightauth = pubkey";
-                        $authentication .= "\n\trightauth2 = xauth";
+                        $authentication = "leftauth = pubkey\n\trightauth = xauth";
                         break;
                 }
                 if (!empty($ph1ent['certref'])) {
@@ -1315,16 +1313,12 @@ EOD;
 
                         if (($ph2ent['mode'] == 'tunnel') || ($ph2ent['mode'] == 'tunnel6')) {
                             $tunneltype = "type = tunnel";
-                            $localid_type = $ph2ent['localid']['type'];
                             $leftsubnet_data = ipsec_idinfo_to_cidr($ph2ent['localid'], false, $ph2ent['mode']);
                             /* Do not print localid in some cases, such as a pure-psk or psk/xauth single phase2 mobile tunnel */
-                            if (($localid_type == "none" || $localid_type == "mobile")
+                            if (($ph2ent['localid']['type'] == "none" || $ph2ent['localid']['type'] == "mobile")
                                 && isset($ph1ent['mobile']) && (ipsec_get_number_of_phase2($ph1ent['ikeid'])==1)) {
                                 $left_spec = '%any';
                             } else {
-                                if ($localid_type != "address") {
-                                    $localid_type = "subnet";
-                                }
                                 // Don't let an empty subnet into config, it can cause parse errors. Ticket #2201.
                                 if (!is_ipaddr($leftsubnet_data) && !is_subnet($leftsubnet_data) && ($leftsubnet_data != "0.0.0.0/0")) {
                                     log_error("Invalid IPsec Phase 2 \"{$ph2ent['descr']}\" - {$ph2ent['localid']['type']} has no subnet.");
@@ -1337,6 +1331,15 @@ EOD;
                             if (!isset($ph2ent['mobile'])) {
                                 $tmpsubnet = ipsec_idinfo_to_cidr($ph2ent['remoteid'], false, $ph2ent['mode']);
                                 $rightsubnet_spec[] = $tmpsubnet;
+                            }
+                        } elseif ($ph2ent['mode'] == 'route-based') {
+                            $is_route_base = true;
+                            if (is_ipaddrv6($ph2ent['tunnel_local'])) {
+                                $leftsubnet_spec[] = '::/0';
+                                $rightsubnet_spec[] = '::/0';
+                            } else {
+                                $leftsubnet_spec[] = '0.0.0.0/0';
+                                $rightsubnet_spec[] = '0.0.0.0/0';
                             }
                         } else {
                             $tunneltype = "type = transport";
@@ -1351,7 +1354,7 @@ EOD;
                                 $rightsubnet_spec[] = $right_spec;
                             }
                         }
-                        if (isset($a_client['pfs_group'])) {
+                        if (isset($ph2ent['mobile']) && isset($a_client['pfs_group'])) {
                             $ph2ent['pfsgroup'] = $a_client['pfs_group'];
                         }
                         if (isset($ph2ent['protocol']) && $ph2ent['protocol'] == 'esp') {
@@ -1450,11 +1453,12 @@ conn con<<connectionId>>
   {$reauth}
   {$rekey}
   {$forceencaps}
-  installpolicy = yes
+  installpolicy = {$installpolicy}
   {$tunneltype}
   {$dpdline}
   left = {$left_spec}
   right = {$right_spec}
+  {$right_any}
   leftid = {$myid_data}
   {$ikelifeline}
 
@@ -1482,9 +1486,15 @@ EOD;
                     for ($idx = 0; $idx < count($leftsubnet_spec); ++$idx) {
                         if (count($leftsubnet_spec) == 1) {
                             $tmpconf = str_replace('<<connectionId>>', "{$ph1ent['ikeid']}", $connEntry);
+                            if ($is_route_base) {
+                                $tmpconf .= sprintf("\treqid = %d\n", (int)$ph1ent['ikeid'] * 1000);
+                            }
                         } else {
                             // suffix connection with sequence number
                             $tmpconf = str_replace('<<connectionId>>', sprintf('%s-%03d', $ph1ent['ikeid'], $idx), $connEntry);
+                            if ($is_route_base) {
+                                $tmpconf .= sprintf("\treqid = %d\n", (int)$ph1ent['ikeid'] * 1000 + $idx);
+                            }
                         }
                         $tmpconf .= "\trightsubnet = " . $rightsubnet_spec[$idx]. "\n";
                         $tmpconf .= "\tleftsubnet = " . $leftsubnet_spec[$idx] . "\n";
@@ -1508,6 +1518,9 @@ EOD;
                             // name from the first configured tunnel ($idx == 0):
                             $conn_suffix = $idx ? sprintf('-%03d', $idx) : '';
                             $tmpconf[] = "conn con{$ph1ent['ikeid']}{$conn_suffix}";
+                            if ($is_route_base) {
+                                $tmpconf[] = sprintf("\treqid = %d\n", (int)$ph1ent['ikeid'] * 1000 + $idx);
+                            }
                             if (!empty($rightsubnet_spec[$idx])) {
                                 $tmpconf[] = "\trightsubnet = {$rightsubnet_spec[$idx]}";
                             }
@@ -1526,6 +1539,9 @@ EOD;
                         }
                     } else {
                         $tmpconf = str_replace('<<connectionId>>', "{$ph1ent['ikeid']}", $connEntry);
+                        if ($is_route_base) {
+                            $tmpconf .= sprintf("\treqid = %d\n", (int)$ph1ent['ikeid'] * 1000);
+                        }
                         if (!empty($rightsubnet_spec)) {
                             $tmpconf .= "\trightsubnet = " . join(',', array_unique($rightsubnet_spec)) . "\n";
                         }
@@ -1563,6 +1579,7 @@ EOD;
             }
         }
     }
+    $ipsecconf .= "\ninclude ipsec.opnsense.d/*.conf\n";
     // dump file, replace tabs for 2 spaces
     @file_put_contents("/usr/local/etc/ipsec.conf", str_replace("\t", '  ', $ipsecconf));
     unset($ipsecconf);
@@ -1580,6 +1597,171 @@ EOD;
 
     /* load manually defined SPD entries */
     ipsec_configure_spd();
+
+    if ($verbose) {
+        echo "done.\n";
+    }
+}
+
+function generate_strongswan_conf(array $tree, $level = 0): string
+{
+    $output = "";
+    foreach ($tree as $key => $value) {
+        $output .= str_repeat('    ', $level) . $key;
+
+        if (strpos($key, '#') === 0) {
+            $output .= "\n";
+        } elseif (is_array($value)) {
+            $output .= " {\n";
+            $output .= generate_strongswan_conf($value, $level + 1);
+            $output .= str_repeat('    ', $level) . "}\n";
+        } else {
+            $output .= " = " . $value . "\n";
+        }
+    }
+    return $output;
+}
+
+function ipsec_get_configured_vtis()
+{
+    global $config;
+    $configured_intf = array();
+    $a_phase1 = isset($config['ipsec']['phase1']) ? $config['ipsec']['phase1'] : array();
+    $a_phase2 = isset($config['ipsec']['phase2']) ? $config['ipsec']['phase2'] : array();
+    foreach ($a_phase1 as $ph1ent) {
+        if (empty($ph1ent['disabled'])) {
+            $phase2items = array();
+            foreach ($a_phase2 as $ph2ent) {
+                if ($ph2ent['mode'] == 'route-based' &&
+                        empty($ph2ent['disabled']) && $ph1ent['ikeid'] == $ph2ent['ikeid']) {
+                    $phase2items[] = $ph2ent;
+                }
+            }
+            foreach ($phase2items as $idx => $phase2) {
+                if ((!isset($ph1ent['mobile']) && $keyexchange == 'ikev1') || isset($ph1ent['tunnel_isolation'])) {
+                    // isolated tunnels
+                    $reqid = (int)$ph1ent['ikeid'] * 1000 + $idx;
+                    $descr = empty($phase2['descr']) ? $ph1ent['descr'] : $phase2['descr'];
+                } else {
+                    $reqid = (int)$ph1ent['ikeid'] * 1000;
+                    $descr = $ph1ent['descr'];
+                }
+                $intfnm = sprintf("ipsec%s", $reqid);
+                if (empty($tunnels[$intfnm])) {
+                    $configured_intf[$intfnm] = array("reqid" => $reqid);
+                    $configured_intf[$intfnm]['local'] = ipsec_get_phase1_src($ph1ent);
+                    $configured_intf[$intfnm]['remote'] = $ph1ent['remote-gateway'];
+                    $configured_intf[$intfnm]['descr'] = $descr;
+                    $configured_intf[$intfnm]['networks'] = array();
+                }
+                $inet = is_ipaddrv6($phase2['tunnel_local']) ? 'inet6' : 'inet';
+                $configured_intf[$intfnm]['networks'][] = [
+                    'inet' => $inet,
+                    'tunnel_local' => $phase2['tunnel_local'],
+                    'mask' => $inet == 'inet6' ? '128' : '32',
+                    'tunnel_remote' => $phase2['tunnel_remote']
+                ];
+            }
+        }
+    }
+
+    return $configured_intf;
+}
+
+/**
+ * Configure required Virtual Terminal Interfaces (synchronizes configuration with local interfaces named ipsec%)
+ */
+function ipsec_configure_vti($verbose = false)
+{
+    // query planned and configured interfaces
+    $configured_intf = ipsec_get_configured_vtis();
+    $current_interfaces = array();
+
+    foreach (legacy_interfaces_details() as $intf => $intf_details) {
+        if (strpos($intf, 'ipsec') === 0) {
+            $current_interfaces[$intf] = $intf_details;
+        }
+    }
+
+    if ($verbose) {
+        echo 'Creating IPsec VTI instances...';
+        flush();
+    }
+
+    // drop changed or not existing interfaces and tunnel endpoints
+    foreach ($current_interfaces as $intf => $intf_details) {
+        if (empty($configured_intf[$intf])
+            || $configured_intf[$intf]['local'] != $intf_details['tunnel']['src_addr']
+            || $configured_intf[$intf]['remote'] != $intf_details['tunnel']['dest_addr']
+        ) {
+            log_error(sprintf("destroy interface %s", $intf));
+            legacy_interface_destroy($intf);
+            unset($current_interfaces[$intf]);
+        } else {
+            foreach (array('ipv4', 'ipv6') as $proto) {
+                foreach ($intf_details[$proto] as $addr) {
+                    if (!empty($addr['endpoint'])) {
+                        $isfound = false;
+                        foreach ($configured_intf[$intf]['networks'] as $network) {
+                            if ($network['tunnel_local'] == $addr['ipaddr']
+                                    && $network['tunnel_remote']  == $addr['endpoint']) {
+                                $isfound = true;
+                                break;
+                            }
+                        }
+                        if (!$isfound) {
+                            log_error(sprintf(
+                                "remove tunnel %s %s from interface %s",
+                                $addr['ipaddr'],
+                                $addr['endpoint'],
+                                $intf
+                            ));
+                            mwexecf('/sbin/ifconfig %s %s %s delete', array(
+                            $intf, $proto == 'ipv6' ? 'inet6' : 'inet',  $addr['ipaddr'], $addr['endpoint']
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // configure new interfaces and tunnels
+    foreach ($configured_intf as $intf => $intf_details) {
+        // create required interfaces
+        $inet = is_ipaddrv6($intf_details['local']) ? 'inet6' : 'inet';
+        if (empty($current_interfaces[$intf])) {
+            if (mwexecf('/sbin/ifconfig %s create reqid %s', array($intf, $intf_details['reqid'])) == 0) {
+                mwexecf(
+                    '/sbin/ifconfig %s %s tunnel %s %s up',
+                    array($intf, $inet, $intf_details['local'], $intf_details['remote'])
+                );
+            }
+        }
+        // create new tunnel endpoints
+        foreach ($intf_details['networks'] as $endpoint) {
+            if (!empty($current_interfaces[$intf])) {
+                $already_configured = $current_interfaces[$intf][$endpoint['inet'] == 'inet6' ? 'ipv6' : 'ipv4'];
+            } else {
+                $already_configured = array();
+            }
+            $isfound = false;
+            foreach ($already_configured as $addr) {
+                if (!empty($addr['endpoint'])) {
+                    if ($endpoint['tunnel_local'] == $addr['ipaddr']
+                            && $endpoint['tunnel_remote']  == $addr['endpoint']) {
+                        $isfound = true;
+                    }
+                }
+            }
+            if (!$isfound) {
+                mwexecf('/sbin/ifconfig %s %s %s %s', array(
+                    $intf, $endpoint['inet'],  sprintf("%s/%s", $endpoint['tunnel_local'], $endpoint['mask']),
+                    $endpoint['tunnel_remote']
+                ));
+            }
+        }
+    }
 
     if ($verbose) {
         echo "done.\n";
